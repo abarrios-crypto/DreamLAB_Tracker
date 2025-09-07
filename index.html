@@ -161,49 +161,51 @@
             </aside>
 
             <!-- Main Content Area -->
-            <main class="flex-1 p-4 sm:p-8 overflow-y-auto">
-                <!-- Mobile Header -->
-                <div class="md:hidden flex items-center justify-between mb-6">
-                    <button id="menu-toggle" class="p-2 rounded-md hover:bg-pink-100">
-                        <i data-lucide="menu" class="w-6 h-6 text-pink-800"></i>
-                    </button>
-                    <h1 class="text-lg font-bold text-pink-800">DreamLAB Tracker</h1>
-                </div>
-
-                <div id="evaluation-content" class="hidden">
-                    <div class="flex flex-col sm:flex-row items-center gap-4 mb-6">
-                        <img id="selected-student-avatar" class="w-20 h-20 rounded-full" alt="">
-                        <div class="text-center sm:text-left">
-                             <h2 class="text-xl sm:text-2xl font-bold text-pink-800">Panel de Evaluación:</h2>
-                             <p id="selected-student-name" class="text-3xl sm:text-4xl font-extrabold text-slate-800"></p>
+            <main class="flex flex-col flex-1">
+                <div class="p-4 sm:p-8 overflow-y-auto flex-grow">
+                    <!-- Mobile Header -->
+                    <div class="md:hidden flex items-center justify-between mb-6">
+                        <button id="menu-toggle" class="p-2 rounded-md hover:bg-pink-100">
+                            <i data-lucide="menu" class="w-6 h-6 text-pink-800"></i>
+                        </button>
+                        <h1 class="text-lg font-bold text-pink-800">DreamLAB Tracker</h1>
+                    </div>
+    
+                    <div id="evaluation-content" class="hidden">
+                        <div class="flex flex-col sm:flex-row items-center gap-4 mb-6">
+                            <img id="selected-student-avatar" class="w-20 h-20 rounded-full" alt="">
+                            <div class="text-center sm:text-left">
+                                 <h2 class="text-xl sm:text-2xl font-bold text-pink-800">Panel de Evaluación:</h2>
+                                 <p id="selected-student-name" class="text-3xl sm:text-4xl font-extrabold text-slate-800"></p>
+                            </div>
+                        </div>
+    
+                        <!-- EC Management Container -->
+                        <div id="ec-management-container" class="mb-6"></div>
+                        
+                        <!-- Tab Navigation -->
+                        <div class="mb-6 p-1.5 bg-pink-100 rounded-full inline-flex items-center">
+                            <button class="tab-button active" onclick="switchEvalTab('parcial')">Evaluaciones Parciales</button>
+                            <button class="tab-button" onclick="switchEvalTab('final')">Evaluaciones Finales</button>
+                        </div>
+    
+                        <!-- Evaluation Tabs -->
+                        <div id="eval-parcial" class="eval-tab-content grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <!-- Partial Evaluation Forms will be rendered here -->
+                        </div>
+                        <div id="eval-final" class="eval-tab-content hidden grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <!-- Final Evaluation Forms will be rendered here -->
                         </div>
                     </div>
-
-                    <!-- EC Management Container -->
-                    <div id="ec-management-container" class="mb-6"></div>
-                    
-                    <!-- Tab Navigation -->
-                    <div class="mb-6 p-1.5 bg-pink-100 rounded-full inline-flex items-center">
-                        <button class="tab-button active" onclick="switchEvalTab('parcial')">Evaluaciones Parciales</button>
-                        <button class="tab-button" onclick="switchEvalTab('final')">Evaluaciones Finales</button>
-                    </div>
-
-                    <!-- Evaluation Tabs -->
-                    <div id="eval-parcial" class="eval-tab-content grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <!-- Partial Evaluation Forms will be rendered here -->
-                    </div>
-                    <div id="eval-final" class="eval-tab-content hidden grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <!-- Final Evaluation Forms will be rendered here -->
+                    <div id="no-student-selected" class="flex h-full items-center justify-center">
+                        <div class="text-center">
+                            <i data-lucide="users" class="mx-auto w-24 h-24 text-pink-300"></i>
+                            <h2 class="mt-4 text-2xl font-bold text-pink-700">Selecciona un estudiante</h2>
+                            <p class="text-slate-500">Elige un estudiante de la lista para comenzar a registrar sus evaluaciones.</p>
+                        </div>
                     </div>
                 </div>
-                <div id="no-student-selected" class="flex h-full items-center justify-center">
-                    <div class="text-center">
-                        <i data-lucide="users" class="mx-auto w-24 h-24 text-pink-300"></i>
-                        <h2 class="mt-4 text-2xl font-bold text-pink-700">Selecciona un estudiante</h2>
-                        <p class="text-slate-500">Elige un estudiante de la lista para comenzar a registrar sus evaluaciones.</p>
-                    </div>
-                </div>
-                <footer class="text-center text-xs text-slate-500 mt-8 py-4 border-t border-pink-100">
+                <footer class="text-center text-xs text-slate-500 py-4 border-t border-pink-100 bg-white">
                     © 2025 | Adriana A. Barrios Rodríguez | Todos los derechos reservados.
                 </footer>
             </main>
@@ -295,6 +297,59 @@ const RUBRICAS = {
     ],
 };
 
+// --- DATA PERSISTENCE ---
+
+function saveData() {
+    localStorage.setItem('dreamlab_data', JSON.stringify(db));
+}
+
+function loadData() {
+    const savedData = localStorage.getItem('dreamlab_data');
+    if (savedData) {
+        db = JSON.parse(savedData);
+    } else {
+        // This is the initial setup if no data is saved
+        const studentNames_5_1 = [
+            "AGUILAR GONZÁLEZ ALEXIS EMMANUEL", "ARMENTA FÉLIX GERMÁN", "ARREDONDO AGUILAR LITZY ESTEFANIA", 
+            "ARREDONDO LÓPEZ NELLY ALEJANDRA", "CUADRAS LUGO DULCE MAYTE", "CUADRAS MORENO CHRISTOPHER IRÁN", 
+            "ESCUDERO SALCEDO ANA BELÉN", "ESPINOZA LEYVA CINDY BELÉN", "GAMBOA LUGO KATHIA ISABEL", 
+            "GARNICA NUÑEZ ANA CARMEN", "GERARDO BOJÓRQUEZ METZLI", "GONZALEZ RUBIO ENRIQUE", 
+            "GUZMÁN LEÓN FÁTIMA ESTEFANÍA", "HUERTA NIEBLAS NAILEA", "JACOBO ISMERIO ANDRÉS ROGELIO", 
+            "LIE ESPINOZA LUIS ROBERTO", "LIZARRAGA SÁNCHEZ CARLOS UVALDO", "LUNA RODRÍGUEZ WILLIAMS ALFREDO", 
+            "MASCAREÑO MORALES LUIS MARIO", "MENDOZA VILLANUEVA LUIS ENRIQUE", "MONTENEGRO GONZÁLEZ MARÍA JOSÉ", 
+            "ONTIVEROS MORALES BYANCA", "PARRA SÁNCHEZ VICTORIA AMAIRANY"
+        ];
+        const studentNames_5_2 = [
+            "ACEVES FERNÁNDEZ ANA VALERIA", "ALANIZ FREGOSO ASHLEY ABISH", "AMBRIZ HERRERA MIGUEL ANGEL", 
+            "ARREDONDO FELIX SEBASTIAN", "BARRERA GARCÍA DULCE ALEJANDRA", "CÁRDENAS PEREZ MARIA YOLANDA", 
+            "CEBREROS GASTELUM NATALIA", "DOMINGUEZ PALMA MARIANA", "ESEVERRE QUEVEDO KEVIN ALEJANDRO", 
+            "ESTRADA CRUZ CAMILA AURORA", "FELIZ OBESO ANA KAREN", "LEYVA VIDOVICH HERICK RAEL", 
+            "MÁRQUEZ GASTELUM KARIME NATALY", "MENDOZA GARCÍA GISELLE ARELY", "NUÑEZ GALLARDO MARIAN LEYLANI", 
+            "URREA LÓPEZ WENDY VIANNEY", "VILLAREAL LÓPEZ ANA MARÍA"
+        ];
+        const studentNames_5_3 = [
+            "CALDERÓN GARCÍA BRITANNY RUBY", "CASTRO NIEBLA FRANCISCO JAVIER", "CAZAREZ JIMENEZ LORENA JACQUELINE", 
+            "HERAS BELTRÁN JOSÉ ÁNGEL", "LUGO BUELNA SEBASTIAN", "PANUSOPULOS LÓPEZ NICKOLAS", 
+            "QUINTERO MILLÁN CAROLINA", "ROJAS ESPINOZA MANUEL EDUARDO", "SOMERA MIRANDA ELIZA ALEJANDRA", 
+            "VALENZUELA GARCÍA SUSAN GABRIELA", "VALENZUELA RENDÓN MARÍA CAMILA", "ALVARADO ROMERO MARIA FERNANDA", 
+            "GUARECA MONJARDIN RAMÓN EDUARDO"
+        ];
+
+        let studentIdCounter = 1;
+        const allStudents = [
+            ...studentNames_5_1.map(name => ({ id: studentIdCounter++, name, group: '5-1', evaluations: [], parciales: { practicas: {}, teoricos: {} } })),
+            ...studentNames_5_2.map(name => ({ id: studentIdCounter++, name, group: '5-2', evaluations: [], parciales: { practicas: {}, teoricos: {} } })),
+            ...studentNames_5_3.map(name => ({ id: studentIdCounter++, name, group: '5-3', evaluations: [], parciales: { practicas: {}, teoricos: {} } }))
+        ].map(student => ({ ...student, avatar: generateAvatarUrl(student.name) }));
+
+        db = {
+            students: allStudents,
+            instructor: { name: "M.C. Adriana A. Barrios Rodríguez", avatar: "https://placehold.co/40x40/d1fae5/064e3b?text=AB" }
+        };
+        saveData(); // Save the initial state
+    }
+}
+
 function generateAvatarUrl(name) {
     const parts = name.split(' ');
     const firstLastNameInitial = parts[0][0];
@@ -305,51 +360,14 @@ function generateAvatarUrl(name) {
     return `https://placehold.co/80x80/${color}?text=${initials}`;
 }
 
-const studentNames_5_1 = [
-    "AGUILAR GONZÁLEZ ALEXIS EMMANUEL", "ARMENTA FÉLIX GERMÁN", "ARREDONDO AGUILAR LITZY ESTEFANIA", 
-    "ARREDONDO LÓPEZ NELLY ALEJANDRA", "CUADRAS LUGO DULCE MAYTE", "CUADRAS MORENO CHRISTOPHER IRÁN", 
-    "ESCUDERO SALCEDO ANA BELÉN", "ESPINOZA LEYVA CINDY BELÉN", "GAMBOA LUGO KATHIA ISABEL", 
-    "GARNICA NUÑEZ ANA CARMEN", "GERARDO BOJÓRQUEZ METZLI", "GONZALEZ RUBIO ENRIQUE", 
-    "GUZMÁN LEÓN FÁTIMA ESTEFANÍA", "HUERTA NIEBLAS NAILEA", "JACOBO ISMERIO ANDRÉS ROGELIO", 
-    "LIE ESPINOZA LUIS ROBERTO", "LIZARRAGA SÁNCHEZ CARLOS UVALDO", "LUNA RODRÍGUEZ WILLIAMS ALFREDO", 
-    "MASCAREÑO MORALES LUIS MARIO", "MENDOZA VILLANUEVA LUIS ENRIQUE", "MONTENEGRO GONZÁLEZ MARÍA JOSÉ", 
-    "ONTIVEROS MORALES BYANCA", "PARRA SÁNCHEZ VICTORIA AMAIRANY"
-];
-const studentNames_5_2 = [
-    "ACEVES FERNÁNDEZ ANA VALERIA", "ALANIZ FREGOSO ASHLEY ABISH", "AMBRIZ HERRERA MIGUEL ANGEL", 
-    "ARREDONDO FELIX SEBASTIAN", "BARRERA GARCÍA DULCE ALEJANDRA", "CÁRDENAS PEREZ MARIA YOLANDA", 
-    "CEBREROS GASTELUM NATALIA", "DOMINGUEZ PALMA MARIANA", "ESEVERRE QUEVEDO KEVIN ALEJANDRO", 
-    "ESTRADA CRUZ CAMILA AURORA", "FELIZ OBESO ANA KAREN", "LEYVA VIDOVICH HERICK RAEL", 
-    "MÁRQUEZ GASTELUM KARIME NATALY", "MENDOZA GARCÍA GISELLE ARELY", "NUÑEZ GALLARDO MARIAN LEYLANI", 
-    "URREA LÓPEZ WENDY VIANNEY", "VILLAREAL LÓPEZ ANA MARÍA"
-];
-const studentNames_5_3 = [
-    "CALDERÓN GARCÍA BRITANNY RUBY", "CASTRO NIEBLA FRANCISCO JAVIER", "CAZAREZ JIMENEZ LORENA JACQUELINE", 
-    "HERAS BELTRÁN JOSÉ ÁNGEL", "LUGO BUELNA SEBASTIAN", "PANUSOPULOS LÓPEZ NICKOLAS", 
-    "QUINTERO MILLÁN CAROLINA", "ROJAS ESPINOZA MANUEL EDUARDO", "SOMERA MIRANDA ELIZA ALEJANDRA", 
-    "VALENZUELA GARCÍA SUSAN GABRIELA", "VALENZUELA RENDÓN MARÍA CAMILA", "ALVARADO ROMERO MARIA FERNANDA", 
-    "GUARECA MONJARDIN RAMÓN EDUARDO"
-];
-
-let studentIdCounter = 1;
-const allStudents = [
-    ...studentNames_5_1.map(name => ({ id: studentIdCounter++, name, group: '5-1', evaluations: [], parciales: { practicas: {}, teoricos: {} } })),
-    ...studentNames_5_2.map(name => ({ id: studentIdCounter++, name, group: '5-2', evaluations: [], parciales: { practicas: {}, teoricos: {} } })),
-    ...studentNames_5_3.map(name => ({ id: studentIdCounter++, name, group: '5-3', evaluations: [], parciales: { practicas: {}, teoricos: {} } }))
-].map(student => ({ ...student, avatar: generateAvatarUrl(student.name) }));
-
-
-let db = {
-    students: allStudents,
-    instructor: { name: "M.C. Adriana A. Barrios Rodríguez", avatar: "https://placehold.co/40x40/d1fae5/064e3b?text=AB" }
-};
-
 // --- STATE MANAGEMENT ---
+let db;
 let selectedStudentId = null;
 let summaryChart = null;
 
 // --- INITIALIZATION ---
 document.addEventListener('DOMContentLoaded', () => {
+    loadData();
     document.getElementById('instructor-name').textContent = db.instructor.name;
     document.getElementById('instructor-avatar').src = db.instructor.avatar;
     renderStudentList();
@@ -647,6 +665,7 @@ function addEvaluation(habilidad, levelData, activityName = null) {
         ec: levelData.ec,
         date: new Date().toLocaleDateString('es-MX')
     });
+    saveData();
     renderStudentList();
     renderEvaluationForms();
 }
@@ -666,7 +685,7 @@ function modifyEvaluation(habilidad) {
     }
     
     showToast(`Evaluación de ${habilidadName} reiniciada. Puede registrar un nuevo valor.`);
-    
+    saveData();
     renderStudentList();
     renderEvaluationForms();
 }
@@ -692,6 +711,7 @@ function addOptionalEC(event) {
         date: new Date().toLocaleDateString('es-MX')
     });
 
+    saveData();
     renderStudentList();
     renderECManagement();
     showToast(`${amount} EC añadidos a ${student.name}.`);
@@ -714,6 +734,7 @@ function convertECtoPC() {
         date: new Date().toLocaleDateString('es-MX')
     });
 
+    saveData();
     renderStudentList();
     renderECManagement();
     showToast(`Canje realizado: -100 EC, +5 PC para ${student.name}.`);
@@ -729,6 +750,7 @@ function saveParciales(event, type) {
             student.parciales[type][key] = parseFloat(value);
         }
     }
+    saveData();
     renderPartialEvalForms();
     showToast('Avances guardados exitosamente.');
 }
@@ -996,5 +1018,4 @@ function createSummaryChart(data) {
 
 </body>
 </html>
-
 
