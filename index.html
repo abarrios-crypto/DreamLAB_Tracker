@@ -1,0 +1,1000 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DreamLAB Tracker - Panel del Docente</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #fdf2f8; /* Very light pink background */
+        }
+        .kirby-card {
+            background-color: white;
+            border-radius: 1.5rem;
+            padding: 1rem; /* p-4 */
+        }
+        @media (min-width: 640px) { /* sm */
+            .kirby-card {
+                padding: 1.5rem; /* sm:p-6 */
+            }
+        }
+        .kirby-button {
+            border-radius: 9999px;
+            font-weight: 600;
+            padding: 0.75rem 1.5rem;
+            transition: all 0.2s ease-in-out;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        .kirby-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .kirby-button-primary {
+            background-color: #ec4899;
+            color: white;
+        }
+        .kirby-button-primary:hover:not(:disabled) {
+            background-color: #db2777;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(236, 72, 153, 0.4);
+        }
+        .kirby-button-secondary {
+            background-color: #fbcfe8;
+            color: #be185d;
+        }
+         .kirby-button-secondary:hover {
+            background-color: #f9a8d4;
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #fdf2f8; }
+        ::-webkit-scrollbar-thumb { background: #f9a8d4; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #ec4899; }
+        
+        /* Modal styles */
+        .modal-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 50;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+        .modal-backdrop.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .modal-content {
+            transform: scale(0.95);
+            transition: transform 0.3s ease;
+        }
+        .modal-backdrop.visible .modal-content {
+            transform: scale(1);
+        }
+
+        .tab-button {
+            padding: 0.5rem 1rem;
+            font-weight: 600;
+            border-radius: 999px;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: #831843;
+        }
+        .tab-button.active {
+            background-color: #ec4899;
+            color: white;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        }
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background-color: #22c55e;
+            color: white;
+            padding: 1rem 1.5rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease-in-out;
+            z-index: 100;
+        }
+        .toast.show {
+            transform: translateX(-50%) translateY(0);
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <!-- Main App Container -->
+    <div id="app-container">
+        <div class="relative min-h-screen md:flex">
+            <!-- Mobile Menu Overlay -->
+            <div id="menu-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-30 hidden md:hidden"></div>
+
+            <!-- Sidebar with Student List -->
+            <aside id="sidebar" class="w-80 bg-white p-4 border-r border-pink-100 flex flex-col fixed inset-y-0 left-0 transform -translate-x-full md:relative md:translate-x-0 transition-transform duration-300 ease-in-out z-40">
+                <div class="flex items-center gap-3 mb-6">
+                    <img src="https://placehold.co/40x40/fdf2f8/ec4899?text=DL" class="rounded-lg" alt="Logo de DreamLAB">
+                    <h1 class="text-xl font-bold text-pink-800">Panel del Docente</h1>
+                </div>
+
+                <!-- Group Filter -->
+                <div class="mb-4">
+                    <label for="group-filter" class="block text-sm font-medium text-slate-700 mb-1">Filtrar por Grupo</label>
+                    <select id="group-filter" onchange="renderStudentList()" class="w-full p-2 border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-pink-500 focus:border-pink-500">
+                        <option value="todos">Todos los Grupos</option>
+                        <option value="5-1">Grupo 5-1</option>
+                        <option value="5-2">Grupo 5-2</option>
+                        <option value="5-3">Grupo 5-3</option>
+                    </select>
+                </div>
+
+                <div id="student-list" class="flex-grow overflow-y-auto pr-2 space-y-2">
+                    <!-- Student list will be rendered here -->
+                </div>
+                <div class="mt-auto pt-4 border-t border-pink-100">
+                    <div class="p-3 bg-pink-50 rounded-lg flex items-center gap-3">
+                        <img id="instructor-avatar" src="" class="rounded-full w-10 h-10" alt="Avatar del instructor">
+                        <div>
+                            <p id="instructor-name" class="font-bold text-pink-900"></p>
+                            <p class="text-sm text-pink-700">Instructor</p>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Main Content Area -->
+            <main class="flex-1 p-4 sm:p-8 overflow-y-auto">
+                <!-- Mobile Header -->
+                <div class="md:hidden flex items-center justify-between mb-6">
+                    <button id="menu-toggle" class="p-2 rounded-md hover:bg-pink-100">
+                        <i data-lucide="menu" class="w-6 h-6 text-pink-800"></i>
+                    </button>
+                    <h1 class="text-lg font-bold text-pink-800">DreamLAB Tracker</h1>
+                </div>
+
+                <div id="evaluation-content" class="hidden">
+                    <div class="flex flex-col sm:flex-row items-center gap-4 mb-6">
+                        <img id="selected-student-avatar" class="w-20 h-20 rounded-full" alt="">
+                        <div class="text-center sm:text-left">
+                             <h2 class="text-xl sm:text-2xl font-bold text-pink-800">Panel de Evaluación:</h2>
+                             <p id="selected-student-name" class="text-3xl sm:text-4xl font-extrabold text-slate-800"></p>
+                        </div>
+                    </div>
+
+                    <!-- EC Management Container -->
+                    <div id="ec-management-container" class="mb-6"></div>
+                    
+                    <!-- Tab Navigation -->
+                    <div class="mb-6 p-1.5 bg-pink-100 rounded-full inline-flex items-center">
+                        <button class="tab-button active" onclick="switchEvalTab('parcial')">Evaluaciones Parciales</button>
+                        <button class="tab-button" onclick="switchEvalTab('final')">Evaluaciones Finales</button>
+                    </div>
+
+                    <!-- Evaluation Tabs -->
+                    <div id="eval-parcial" class="eval-tab-content grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <!-- Partial Evaluation Forms will be rendered here -->
+                    </div>
+                    <div id="eval-final" class="eval-tab-content hidden grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <!-- Final Evaluation Forms will be rendered here -->
+                    </div>
+                </div>
+                <div id="no-student-selected" class="flex h-full items-center justify-center">
+                    <div class="text-center">
+                        <i data-lucide="users" class="mx-auto w-24 h-24 text-pink-300"></i>
+                        <h2 class="mt-4 text-2xl font-bold text-pink-700">Selecciona un estudiante</h2>
+                        <p class="text-slate-500">Elige un estudiante de la lista para comenzar a registrar sus evaluaciones.</p>
+                    </div>
+                </div>
+                <footer class="text-center text-xs text-slate-500 mt-8 py-4 border-t border-pink-100">
+                    © 2025 | Adriana A. Barrios Rodríguez | Todos los derechos reservados.
+                </footer>
+            </main>
+        </div>
+    </div>
+
+    <!-- Student Summary Modal -->
+    <div id="summary-modal" class="modal-backdrop">
+        <div class="kirby-card w-full max-w-md md:max-w-2xl lg:max-w-4xl max-h-[90vh] flex flex-col modal-content">
+            <div id="summary-modal-header" class="flex justify-between items-center mb-4">
+                 <!-- Header content will be rendered here -->
+            </div>
+            <div id="summary-modal-body" class="overflow-y-auto pr-4">
+                 <!-- Summary content will be rendered here -->
+            </div>
+        </div>
+    </div>
+    
+    <!-- Toast Notification -->
+    <div id="toast" class="toast"></div>
+
+<script>
+// --- DATABASE AND GAMIFICATION RULES (based on PDFs) ---
+const HABILIDADES = {
+    constancia: { name: "Constancia", totalPC: 20 },
+    practica: { name: "Aplicación Práctica", totalPC: 20 },
+    teoria: { name: "Comprensión Teórica", totalPC: 10 },
+    interpretacion: { name: "Interpretación Clínica y Desarrollo Técnico", totalPC: 30 },
+    analisis: { name: "Análisis Crítico", totalPC: 10 },
+    argumentacion: { name: "Argumentación", totalPC: 10 },
+};
+
+const PRACTICAS = {
+    hematocrito: "Determinación de hematocrito",
+    globulos_rojos: "Conteo de glóbulos rojos",
+    globulos_blancos: "Conteo de glóbulos blancos",
+    plaquetas: "Conteo de plaquetas",
+    extendido: "Extendido sanguíneo",
+    diferencial: "Diferencial leucocitario",
+    grupo_sanguineo: "Grupo Sanguíneo"
+};
+
+const UNIDADES_TEORICAS = {
+    unidad1: "Unidad 1: Introducción a la Patología Clínica II",
+    unidad2: "Unidad 2: Estudio Básico de la Sangre",
+    unidad3: "Unidad 3: Banco de Sangre y Medicina Transfusional",
+    unidad4: "Unidad 4: Valoración Metabólica Básica",
+    unidad5: "Unidad 5: Valoración Renal Básica",
+    unidad6: "Unidad 6: Valoración Hepática Básica",
+    unidad7: "Unidad 7: Evaluación del Equilibrio Ácido-Base"
+};
+
+const RUBRICAS = {
+    constancia: [
+        { level: "Bio-Aprendiz", pc: 5, ec: 0, criteria: "Entrega menos del 60% de actividades y poca participación" },
+        { level: "Bio-Técnico", pc: 10, ec: 0, criteria: "Entrega al menos 60% de actividades; participación limitada" },
+        { level: "Bio-Maestro", pc: 20, ec: 0, criteria: "Entrega casi todas puntuales; participa regularmente" },
+        { level: "Bio-Héroe", pc: 20, ec: 25, criteria: "Además motiva y apoya a compañeros" },
+    ],
+    practica: [
+        { level: "Bio-Aprendiz", pc: 5, ec: 0, criteria: "Comete errores frecuentes en técnicas; requiere supervisión" },
+        { level: "Bio-Técnico", pc: 10, ec: 0, criteria: "Aplica técnicas básicas con pequeños errores" },
+        { level: "Bio-Maestro", pc: 20, ec: 0, criteria: "Ejecuta procedimientos autónomamente y correctamente" },
+        { level: "Bio-Héroe", pc: 20, ec: 25, criteria: "Demuestra excelencia y liderazgo técnico" },
+    ],
+    teoria: [
+        { range: [1.0, 4.9], level: "Bio-Aprendiz", pc: 3, ec: 0 },
+        { range: [5.0, 7.9], level: "Bio-Técnico", pc: 6, ec: 0 },
+        { range: [8.0, 8.9], level: "Bio-Maestro", pc: 10, ec: 0 },
+        { range: [9.0, 10.0], level: "Bio-Héroe", pc: 10, ec: 25 },
+    ],
+    interpretacion: [
+        { range: [1.0, 4.9], level: "Bio-Aprendiz", pc: 5, ec: 0 },
+        { range: [5.0, 7.9], level: "Bio-Técnico", pc: 10, ec: 0 },
+        { range: [8.0, 8.9], level: "Bio-Maestro", pc: 20, ec: 0 },
+        { range: [9.0, 10.0], level: "Bio-Héroe", pc: 30, ec: 25 },
+    ],
+    analisis: [
+        { level: "Bio-Aprendiz", pc: 3, ec: 0, criteria: "Análisis superficial, sin justificación robusta" },
+        { level: "Bio-Técnico", pc: 6, ec: 0, criteria: "Análisis correcto pero con justificaciones limitadas" },
+        { level: "Bio-Maestro", pc: 10, ec: 0, criteria: "Análisis profundo, bien justificado y con rigor conceptual" },
+        { level: "Bio-Héroe", pc: 10, ec: 25, criteria: "Análisis crítico excepcional, propone mejoras o nuevas perspectivas" },
+    ],
+    argumentacion: [
+        { level: "Bio-Aprendiz", pc: 3, ec: 0, criteria: "Argumentos débiles, comunicación poco clara" },
+        { level: "Bio-Técnico", pc: 6, ec: 0, criteria: "Argumentos correctos pero poco persuasivos" },
+        { level: "Bio-Maestro", pc: 10, ec: 0, criteria: "Argumentación sólida, comunicación efectiva y persuasiva" },
+        { level: "Bio-Héroe", pc: 10, ec: 25, criteria: "Presentación sobresaliente, dominio total del tema y la audiencia" },
+    ],
+};
+
+function generateAvatarUrl(name) {
+    const parts = name.split(' ');
+    const firstLastNameInitial = parts[0][0];
+    const nameInitial = parts[parts.length -1][0];
+    const initials = `${firstLastNameInitial}${nameInitial}`.toUpperCase();
+    const colors = ['f0abfc/4a044e', 'bae6fd/0c4a6e', 'fef08a/854d0e', 'd1fae5/064e3b', 'fecaca/991b1b', 'c7d2fe/4338ca'];
+    const color = colors[Math.floor(Math.random() * colors.length)];
+    return `https://placehold.co/80x80/${color}?text=${initials}`;
+}
+
+const studentNames_5_1 = [
+    "AGUILAR GONZÁLEZ ALEXIS EMMANUEL", "ARMENTA FÉLIX GERMÁN", "ARREDONDO AGUILAR LITZY ESTEFANIA", 
+    "ARREDONDO LÓPEZ NELLY ALEJANDRA", "CUADRAS LUGO DULCE MAYTE", "CUADRAS MORENO CHRISTOPHER IRÁN", 
+    "ESCUDERO SALCEDO ANA BELÉN", "ESPINOZA LEYVA CINDY BELÉN", "GAMBOA LUGO KATHIA ISABEL", 
+    "GARNICA NUÑEZ ANA CARMEN", "GERARDO BOJÓRQUEZ METZLI", "GONZALEZ RUBIO ENRIQUE", 
+    "GUZMÁN LEÓN FÁTIMA ESTEFANÍA", "HUERTA NIEBLAS NAILEA", "JACOBO ISMERIO ANDRÉS ROGELIO", 
+    "LIE ESPINOZA LUIS ROBERTO", "LIZARRAGA SÁNCHEZ CARLOS UVALDO", "LUNA RODRÍGUEZ WILLIAMS ALFREDO", 
+    "MASCAREÑO MORALES LUIS MARIO", "MENDOZA VILLANUEVA LUIS ENRIQUE", "MONTENEGRO GONZÁLEZ MARÍA JOSÉ", 
+    "ONTIVEROS MORALES BYANCA", "PARRA SÁNCHEZ VICTORIA AMAIRANY"
+];
+const studentNames_5_2 = [
+    "ACEVES FERNÁNDEZ ANA VALERIA", "ALANIZ FREGOSO ASHLEY ABISH", "AMBRIZ HERRERA MIGUEL ANGEL", 
+    "ARREDONDO FELIX SEBASTIAN", "BARRERA GARCÍA DULCE ALEJANDRA", "CÁRDENAS PEREZ MARIA YOLANDA", 
+    "CEBREROS GASTELUM NATALIA", "DOMINGUEZ PALMA MARIANA", "ESEVERRE QUEVEDO KEVIN ALEJANDRO", 
+    "ESTRADA CRUZ CAMILA AURORA", "FELIZ OBESO ANA KAREN", "LEYVA VIDOVICH HERICK RAEL", 
+    "MÁRQUEZ GASTELUM KARIME NATALY", "MENDOZA GARCÍA GISELLE ARELY", "NUÑEZ GALLARDO MARIAN LEYLANI", 
+    "URREA LÓPEZ WENDY VIANNEY", "VILLAREAL LÓPEZ ANA MARÍA"
+];
+const studentNames_5_3 = [
+    "CALDERÓN GARCÍA BRITANNY RUBY", "CASTRO NIEBLA FRANCISCO JAVIER", "CAZAREZ JIMENEZ LORENA JACQUELINE", 
+    "HERAS BELTRÁN JOSÉ ÁNGEL", "LUGO BUELNA SEBASTIAN", "PANUSOPULOS LÓPEZ NICKOLAS", 
+    "QUINTERO MILLÁN CAROLINA", "ROJAS ESPINOZA MANUEL EDUARDO", "SOMERA MIRANDA ELIZA ALEJANDRA", 
+    "VALENZUELA GARCÍA SUSAN GABRIELA", "VALENZUELA RENDÓN MARÍA CAMILA", "ALVARADO ROMERO MARIA FERNANDA", 
+    "GUARECA MONJARDIN RAMÓN EDUARDO"
+];
+
+let studentIdCounter = 1;
+const allStudents = [
+    ...studentNames_5_1.map(name => ({ id: studentIdCounter++, name, group: '5-1', evaluations: [], parciales: { practicas: {}, teoricos: {} } })),
+    ...studentNames_5_2.map(name => ({ id: studentIdCounter++, name, group: '5-2', evaluations: [], parciales: { practicas: {}, teoricos: {} } })),
+    ...studentNames_5_3.map(name => ({ id: studentIdCounter++, name, group: '5-3', evaluations: [], parciales: { practicas: {}, teoricos: {} } }))
+].map(student => ({ ...student, avatar: generateAvatarUrl(student.name) }));
+
+
+let db = {
+    students: allStudents,
+    instructor: { name: "M.C. Adriana A. Barrios Rodríguez", avatar: "https://placehold.co/40x40/d1fae5/064e3b?text=AB" }
+};
+
+// --- STATE MANAGEMENT ---
+let selectedStudentId = null;
+let summaryChart = null;
+
+// --- INITIALIZATION ---
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('instructor-name').textContent = db.instructor.name;
+    document.getElementById('instructor-avatar').src = db.instructor.avatar;
+    renderStudentList();
+    lucide.createIcons();
+    setupResponsiveMenu();
+});
+
+function setupResponsiveMenu() {
+    const menuToggle = document.getElementById('menu-toggle');
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('menu-overlay');
+
+    menuToggle.addEventListener('click', toggleMenu);
+    overlay.addEventListener('click', toggleMenu);
+}
+
+function toggleMenu() {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('menu-overlay');
+    sidebar.classList.toggle('-translate-x-full');
+    overlay.classList.toggle('hidden');
+}
+
+// --- RENDERING FUNCTIONS ---
+function renderStudentList() {
+    const listContainer = document.getElementById('student-list');
+    const filter = document.getElementById('group-filter').value;
+
+    const filteredStudents = db.students.filter(student => filter === 'todos' || student.group === filter);
+
+    listContainer.innerHTML = filteredStudents.map(student => {
+        const totals = calculateTotals(student);
+        return `
+            <div 
+                class="flex items-center p-3 rounded-lg cursor-pointer transition-colors ${student.id === selectedStudentId ? 'bg-pink-100' : 'hover:bg-pink-50'}"
+                onclick="selectStudent(${student.id})"
+            >
+                <img src="${student.avatar}" class="w-12 h-12 rounded-full mr-4" alt="Avatar de ${student.name}">
+                <div class="flex-grow overflow-hidden">
+                    <p class="font-semibold text-slate-800 text-sm truncate">${student.name}</p>
+                     <div class="flex items-center gap-2 sm:gap-4 mt-1">
+                        <span class="text-xs font-bold text-pink-700 bg-pink-100 px-2 py-0.5 rounded-full inline-block">G-${student.group}</span>
+                        <p class="text-sm text-slate-500 font-medium">
+                            <span class="text-pink-600">${totals.pc}PC</span> | 
+                            <span class="text-yellow-600">${totals.ec}EC</span>
+                        </p>
+                    </div>
+                </div>
+                <button class="p-1 rounded-full hover:bg-pink-200 text-pink-700 ml-2 flex-shrink-0" onclick="event.stopPropagation(); showStudentSummary(${student.id})">
+                    <i data-lucide="eye"></i>
+                </button>
+            </div>
+        `;
+    }).join('');
+    lucide.createIcons();
+}
+
+
+function renderEvaluationForms() {
+    renderECManagement();
+    renderPartialEvalForms();
+    renderFinalEvalForms();
+}
+
+function renderECManagement() {
+    const student = db.students.find(s => s.id === selectedStudentId);
+    if (!student) return;
+
+    const totals = calculateTotals(student);
+    const canConvert = totals.ec >= 100;
+
+    const container = document.getElementById('ec-management-container');
+    container.innerHTML = `
+        <div class="kirby-card">
+            <h3 class="text-xl font-bold text-pink-800 mb-4">Gestión de Estrellas de Crédito (EC)</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+                <div>
+                    <h4 class="font-semibold text-slate-700 mb-2">Añadir EC por Misiones Opcionales</h4>
+                    <form id="form-add-ec" onsubmit="addOptionalEC(event)">
+                        <div class="space-y-3">
+                            <input type="number" name="amount" min="1" placeholder="Cantidad de EC" class="w-full p-2 border border-slate-300 rounded-lg" required>
+                            <input type="text" name="reason" placeholder="Razón (Ej: Tesoro Patógeno Alfa)" class="w-full p-2 border border-slate-300 rounded-lg" required>
+                            <button type="submit" class="kirby-button kirby-button-secondary w-full">
+                                <i data-lucide="plus-circle" class="mr-2"></i>Añadir EC
+                            </button>
+                        </div>
+                    </form>
+                </div>
+                <div class="bg-pink-50 p-4 rounded-lg text-center">
+                    <p class="text-pink-800 font-semibold">Balance Actual de EC</p>
+                    <p class="text-4xl sm:text-5xl font-extrabold text-pink-700 my-2">${totals.ec}</p>
+                    <p class="text-sm text-slate-500 mb-4">Se necesitan 100 EC para obtener 5 PC.</p>
+                    <button onclick="convertECtoPC()" class="kirby-button kirby-button-primary w-full" ${!canConvert ? 'disabled' : ''}>
+                        <i data-lucide="gift" class="mr-2"></i>Convertir 100 EC a 5 PC
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    lucide.createIcons();
+}
+
+function renderPartialEvalForms() {
+    const student = db.students.find(s => s.id === selectedStudentId);
+    const container = document.getElementById('eval-parcial');
+    
+    const hasPracticaFinal = student.evaluations.some(e => e.habilidad === 'practica');
+    const hasTeoriaFinal = student.evaluations.some(e => e.habilidad === 'teoria');
+    
+    const practicasCount = Object.keys(student.parciales.practicas).length;
+    const teoricosCount = Object.keys(student.parciales.teoricos).filter(k => student.parciales.teoricos[k] !== '').length;
+
+    container.innerHTML = `
+        <!-- Prácticas de Laboratorio -->
+        <div class="kirby-card">
+            <h3 class="text-xl font-bold text-pink-800 mb-2">${HABILIDADES.practica.name}</h3>
+            <p class="text-sm text-slate-500 mb-4">Registre el nivel de cada práctica. El promedio final se calculará cuando todas estén completas.</p>
+            <form id="form-practica" onsubmit="saveParciales(event, 'practicas')">
+                <div class="space-y-3 max-h-80 overflow-y-auto pr-2 mb-4">
+                    ${Object.keys(PRACTICAS).map(key => `
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">${PRACTICAS[key]}</label>
+                            <select name="${key}" class="w-full p-2 border border-slate-300 rounded-lg bg-white" ${hasPracticaFinal ? 'disabled' : ''}>
+                                <option value="0" ${!student.parciales.practicas[key] ? 'selected' : ''}>Sin calificar</option>
+                                <option value="1" ${student.parciales.practicas[key] == 1 ? 'selected' : ''}>Bio-Aprendiz</option>
+                                <option value="2" ${student.parciales.practicas[key] == 2 ? 'selected' : ''}>Bio-Técnico</option>
+                                <option value="3" ${student.parciales.practicas[key] == 3 ? 'selected' : ''}>Bio-Maestro</option>
+                                <option value="4" ${student.parciales.practicas[key] == 4 ? 'selected' : ''}>Bio-Héroe</option>
+                            </select>
+                        </div>
+                    `).join('')}
+                </div>
+                <div class="flex flex-col sm:flex-row gap-2">
+                    <button type="submit" class="kirby-button kirby-button-secondary w-full" ${hasPracticaFinal ? 'disabled' : ''}>Guardar Avances</button>
+                    ${hasPracticaFinal
+                        ? `<button type="button" onclick="modifyEvaluation('practica')" class="kirby-button kirby-button-secondary w-full">Modificar Calificación Final</button>`
+                        : `<button type="button" onclick="calculateFinalPractica()" class="kirby-button kirby-button-primary w-full" ${practicasCount < 7 ? 'disabled' : ''}>Calcular Nivel Final</button>`
+                    }
+                </div>
+            </form>
+        </div>
+        <!-- Exámenes Teóricos -->
+        <div class="kirby-card">
+            <h3 class="text-xl font-bold text-pink-800 mb-2">${HABILIDADES.teoria.name}</h3>
+            <p class="text-sm text-slate-500 mb-4">Registre la calificación de cada unidad. El promedio final se calculará cuando todas estén completas.</p>
+            <form id="form-teoria" onsubmit="saveParciales(event, 'teoricos')">
+                <div class="space-y-3 max-h-80 overflow-y-auto pr-2 mb-4">
+                    ${Object.keys(UNIDADES_TEORICAS).map(key => `
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 truncate" title="${UNIDADES_TEORICAS[key]}">${UNIDADES_TEORICAS[key]}</label>
+                             <input type="number" name="${key}" min="0" max="10" step="0.1" placeholder="0-10" class="w-full p-2 border border-slate-300 rounded-lg" value="${student.parciales.teoricos[key] || ''}" ${hasTeoriaFinal ? 'disabled' : ''}>
+                        </div>
+                    `).join('')}
+                </div>
+                 <div class="flex flex-col sm:flex-row gap-2">
+                    <button type="submit" class="kirby-button kirby-button-secondary w-full" ${hasTeoriaFinal ? 'disabled' : ''}>Guardar Avances</button>
+                    ${hasTeoriaFinal
+                        ? `<button type="button" onclick="modifyEvaluation('teoria')" class="kirby-button kirby-button-secondary w-full">Modificar Calificación Final</button>`
+                        : `<button type="button" onclick="calculateFinalTeoria()" class="kirby-button kirby-button-primary w-full" ${teoricosCount < 7 ? 'disabled' : ''}>Calcular Nivel Final</button>`
+                    }
+                </div>
+            </form>
+        </div>
+    `;
+}
+
+function renderFinalEvalForms() {
+    const student = db.students.find(s => s.id === selectedStudentId);
+    const container = document.getElementById('eval-final');
+    
+    const hasConstancia = student.evaluations.some(e => e.habilidad === 'constancia');
+    const hasInterpretacion = student.evaluations.some(e => e.habilidad === 'interpretacion');
+    const hasProyecto = student.evaluations.some(e => e.habilidad === 'analisis');
+
+    container.innerHTML = `
+        <!-- Constancia -->
+        <div class="kirby-card">
+            <h3 class="text-xl font-bold text-pink-800 mb-4">${HABILIDADES.constancia.name}</h3>
+            <form id="form-constancia" onsubmit="submitFinal(event, 'constancia')">
+                <p class="text-sm text-slate-500 mb-4">Evaluación única al final del semestre.</p>
+                <div class="space-y-2 mb-4">
+                    ${RUBRICAS.constancia.map((level, i) => `
+                        <div>
+                            <input type="radio" name="level" value="${i}" id="constancia-level-${i}" class="hidden peer" required ${hasConstancia ? 'disabled' : ''}>
+                            <label for="constancia-level-${i}" class="block p-3 border border-slate-200 rounded-lg cursor-pointer peer-checked:border-pink-500 peer-checked:bg-pink-50">
+                                <p class="font-bold text-pink-700">${level.level}</p>
+                                <p class="text-sm text-slate-600">${level.criteria}</p>
+                            </label>
+                        </div>
+                    `).join('')}
+                </div>
+                ${hasConstancia
+                    ? `<button type="button" onclick="modifyEvaluation('constancia')" class="kirby-button kirby-button-secondary w-full">Modificar Evaluación</button>`
+                    : `<button type="submit" class="kirby-button kirby-button-primary w-full">Registrar Constancia</button>`
+                }
+            </form>
+        </div>
+        <!-- Examen Práctico -->
+        <div class="kirby-card">
+            <h3 class="text-xl font-bold text-pink-800 mb-4">${HABILIDADES.interpretacion.name}</h3>
+             <form id="form-interpretacion" onsubmit="submitFinalScore(event, 'interpretacion')">
+                <p class="text-sm text-slate-500 mb-4">Evaluación única al final del semestre (semanas 13-14).</p>
+                <input type="number" name="score" min="0" max="10" step="0.1" placeholder="Calificación (0-10)" class="w-full p-2 border border-slate-300 rounded-lg mb-4" required ${hasInterpretacion ? 'disabled' : ''}>
+                ${hasInterpretacion
+                    ? `<button type="button" onclick="modifyEvaluation('interpretacion')" class="kirby-button kirby-button-secondary w-full">Modificar Evaluación</button>`
+                    : `<button type="submit" class="kirby-button kirby-button-primary w-full">Registrar Examen Práctico</button>`
+                }
+            </form>
+        </div>
+        <!-- Proyecto Final -->
+        <div class="kirby-card lg:col-span-2">
+            <h3 class="text-xl font-bold text-pink-800 mb-4">Proyecto Final</h3>
+            <form id="form-proyecto" onsubmit="submitProyecto(event)">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <h4 class="font-semibold text-slate-700 mb-2">${HABILIDADES.analisis.name}</h4>
+                        <div class="space-y-2">
+                            ${RUBRICAS.analisis.map((level, i) => `
+                                <div>
+                                    <input type="radio" name="analisis_level" value="${i}" id="analisis-level-${i}" class="hidden peer" required ${hasProyecto ? 'disabled' : ''}>
+                                    <label for="analisis-level-${i}" class="block p-2 border border-slate-200 rounded-lg cursor-pointer peer-checked:border-pink-500 peer-checked:bg-pink-50 text-sm">
+                                        <p class="font-bold text-pink-700">${level.level}</p>
+                                        <p class="text-slate-600">${level.criteria}</p>
+                                    </label>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    <div>
+                        <h4 class="font-semibold text-slate-700 mb-2">${HABILIDADES.argumentacion.name}</h4>
+                        <div class="space-y-2">
+                             ${RUBRICAS.argumentacion.map((level, i) => `
+                                <div>
+                                    <input type="radio" name="argumentacion_level" value="${i}" id="argumentacion-level-${i}" class="hidden peer" required ${hasProyecto ? 'disabled' : ''}>
+                                    <label for="argumentacion-level-${i}" class="block p-2 border border-slate-200 rounded-lg cursor-pointer peer-checked:border-pink-500 peer-checked:bg-pink-50 text-sm">
+                                        <p class="font-bold text-pink-700">${level.level}</p>
+                                        <p class="text-slate-600">${level.criteria}</p>
+                                    </label>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+                 ${hasProyecto
+                    ? `<button type="button" onclick="modifyEvaluation('proyecto')" class="kirby-button kirby-button-secondary w-full mt-6">Modificar Evaluación</button>`
+                    : `<button type="submit" class="kirby-button kirby-button-primary w-full mt-6">Registrar Proyecto Final</button>`
+                }
+            </form>
+        </div>
+    `;
+}
+
+// --- EVENT HANDLERS & LOGIC ---
+
+function selectStudent(studentId) {
+    selectedStudentId = studentId;
+    const student = db.students.find(s => s.id === studentId);
+    document.getElementById('evaluation-content').classList.remove('hidden');
+    document.getElementById('no-student-selected').classList.add('hidden');
+    document.getElementById('selected-student-avatar').src = student.avatar;
+    document.getElementById('selected-student-name').textContent = student.name;
+    
+    if (window.innerWidth < 768) { // md breakpoint
+        toggleMenu();
+    }
+
+    renderStudentList();
+    renderEvaluationForms();
+    switchEvalTab('parcial');
+}
+
+function switchEvalTab(tabId) {
+    document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+    document.querySelector(`.tab-button[onclick="switchEvalTab('${tabId}')"]`).classList.add('active');
+    document.querySelectorAll('.eval-tab-content').forEach(c => c.classList.add('hidden'));
+    document.getElementById(`eval-${tabId}`).classList.remove('hidden');
+}
+
+function calculateTotals(student) {
+    return student.evaluations.reduce((acc, curr) => {
+        acc.pc += curr.pc;
+        acc.ec += curr.ec;
+        return acc;
+    }, { pc: 0, ec: 0 });
+}
+
+function addEvaluation(habilidad, levelData, activityName = null) {
+    const student = db.students.find(s => s.id === selectedStudentId);
+    student.evaluations.push({
+        id: Date.now(),
+        habilidad,
+        activity: activityName || HABILIDADES[habilidad].name,
+        level: levelData.level,
+        pc: levelData.pc,
+        ec: levelData.ec,
+        date: new Date().toLocaleDateString('es-MX')
+    });
+    renderStudentList();
+    renderEvaluationForms();
+}
+
+function modifyEvaluation(habilidad) {
+    const student = db.students.find(s => s.id === selectedStudentId);
+    if (!student) return;
+
+    let habilidadName = '';
+
+    if (habilidad === 'proyecto') {
+        student.evaluations = student.evaluations.filter(ev => ev.habilidad !== 'analisis' && ev.habilidad !== 'argumentacion');
+        habilidadName = 'Proyecto Final';
+    } else {
+        student.evaluations = student.evaluations.filter(ev => ev.habilidad !== habilidad);
+        habilidadName = HABILIDADES[habilidad].name;
+    }
+    
+    showToast(`Evaluación de ${habilidadName} reiniciada. Puede registrar un nuevo valor.`);
+    
+    renderStudentList();
+    renderEvaluationForms();
+}
+
+
+// Form Submissions
+function addOptionalEC(event) {
+    event.preventDefault();
+    const form = event.target;
+    const amount = parseInt(form.elements.amount.value);
+    const reason = form.elements.reason.value;
+    
+    if (isNaN(amount) || amount <= 0) return;
+
+    const student = db.students.find(s => s.id === selectedStudentId);
+    student.evaluations.push({
+        id: Date.now(),
+        habilidad: 'recompensa',
+        activity: reason,
+        level: 'Misión Opcional',
+        pc: 0,
+        ec: amount,
+        date: new Date().toLocaleDateString('es-MX')
+    });
+
+    renderStudentList();
+    renderECManagement();
+    showToast(`${amount} EC añadidos a ${student.name}.`);
+    form.reset();
+}
+
+function convertECtoPC() {
+    const student = db.students.find(s => s.id === selectedStudentId);
+    const totals = calculateTotals(student);
+
+    if (totals.ec < 100) return;
+
+    student.evaluations.push({
+        id: Date.now(),
+        habilidad: 'conversion',
+        activity: 'Canje de 100 EC por 5 PC',
+        level: 'Conversión',
+        pc: 5,
+        ec: -100,
+        date: new Date().toLocaleDateString('es-MX')
+    });
+
+    renderStudentList();
+    renderECManagement();
+    showToast(`Canje realizado: -100 EC, +5 PC para ${student.name}.`);
+}
+
+function saveParciales(event, type) {
+    event.preventDefault();
+    const student = db.students.find(s => s.id === selectedStudentId);
+    const formData = new FormData(event.target);
+    student.parciales[type] = {}; // Clear old data before saving new
+    for (const [key, value] of formData.entries()) {
+        if (value && value !== '0' && value !== '') {
+            student.parciales[type][key] = parseFloat(value);
+        }
+    }
+    renderPartialEvalForms();
+    showToast('Avances guardados exitosamente.');
+}
+
+function calculateFinalPractica() {
+    const student = db.students.find(s => s.id === selectedStudentId);
+    const practiceScores = Object.values(student.parciales.practicas);
+    if (practiceScores.length < 7) return;
+
+    const sum = practiceScores.reduce((acc, score) => acc + score, 0);
+    const avg = sum / practiceScores.length;
+
+    let finalLevelIndex;
+    if (avg < 1.75) finalLevelIndex = 0; // Bio-Aprendiz
+    else if (avg < 2.75) finalLevelIndex = 1; // Bio-Técnico
+    else if (avg < 3.5) finalLevelIndex = 2; // Bio-Maestro
+    else finalLevelIndex = 3; // Bio-Héroe
+
+    const levelData = RUBRICAS.practica[finalLevelIndex];
+    addEvaluation('practica', levelData, 'Promedio Final de Prácticas');
+}
+
+function calculateFinalTeoria() {
+    const student = db.students.find(s => s.id === selectedStudentId);
+    const theoryScores = Object.values(student.parciales.teoricos);
+    if (theoryScores.length < 7) return;
+
+    const sum = theoryScores.reduce((acc, score) => acc + score, 0);
+    const avg = sum / theoryScores.length;
+
+    const levelData = RUBRICAS.teoria.find(r => avg >= r.range[0] && avg <= r.range[1]);
+    if (levelData) {
+        addEvaluation('teoria', levelData, `Promedio Final Teórico (${avg.toFixed(2)})`);
+    }
+}
+
+function submitFinal(event, habilidad) {
+    event.preventDefault();
+    const levelIndex = event.target.elements.level.value;
+    const levelData = RUBRICAS[habilidad][levelIndex];
+    addEvaluation(habilidad, levelData);
+}
+
+function submitFinalScore(event, habilidad) {
+    event.preventDefault();
+    const score = parseFloat(event.target.elements.score.value);
+    const levelData = RUBRICAS[habilidad].find(r => score >= r.range[0] && score <= r.range[1]);
+    if (levelData) {
+        addEvaluation(habilidad, levelData);
+    }
+}
+
+function submitProyecto(event) {
+    event.preventDefault();
+    const analisisIndex = event.target.elements.analisis_level.value;
+    const argumentacionIndex = event.target.elements.argumentacion_level.value;
+    
+    addEvaluation('analisis', RUBRICAS.analisis[analisisIndex], 'Proyecto Final - Análisis');
+    addEvaluation('argumentacion', RUBRICAS.argumentacion[argumentacionIndex], 'Proyecto Final - Argumentación');
+}
+
+// Modal and UI helpers
+function showStudentSummary(studentId) {
+    const student = db.students.find(s => s.id === studentId);
+    const totals = calculateTotals(student);
+    const header = document.getElementById('summary-modal-header');
+    const body = document.getElementById('summary-modal-body');
+
+    header.innerHTML = `
+        <h2 class="text-2xl sm:text-3xl font-bold text-pink-800">Resumen de Progreso</h2>
+        <div class="flex items-center gap-2">
+            <button onclick="downloadSummary(${student.id})" class="p-2 rounded-full hover:bg-pink-100 text-pink-700" title="Descargar Resumen">
+                <i data-lucide="download-cloud"></i>
+            </button>
+            <button onclick="closeModal('summary-modal')" class="p-2 rounded-full hover:bg-pink-100">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+    `;
+
+    const pcByHabilidad = Object.keys(HABILIDADES).reduce((acc, key) => {
+        acc[key] = { name: HABILIDADES[key].name, pc: 0, total: HABILIDADES[key].totalPC };
+        return acc;
+    }, {});
+
+    student.evaluations.forEach(ev => {
+        if(pcByHabilidad[ev.habilidad]) {
+            pcByHabilidad[ev.habilidad].pc += ev.pc;
+        }
+    });
+
+    body.innerHTML = `
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-6">
+            <div class="kirby-card text-center col-span-1 sm:col-span-3">
+                <img src="${student.avatar}" class="w-24 h-24 rounded-full mx-auto mb-3" />
+                <h3 class="text-xl sm:text-2xl font-bold text-slate-800">${student.name}</h3>
+                <span class="text-md font-bold text-pink-700 bg-pink-100 px-3 py-1 rounded-full inline-block">Grupo ${student.group}</span>
+            </div>
+            <div class="kirby-card text-center bg-pink-50 col-span-1 sm:col-span-3 md:col-span-1">
+                <i data-lucide="heart" class="w-12 h-12 mx-auto text-pink-500"></i>
+                <p class="text-4xl sm:text-5xl font-extrabold text-pink-800 mt-2">${totals.pc}</p>
+                <p class="text-pink-700 font-semibold">Puntos de Corazón (PC) de 100</p>
+            </div>
+            <div class="kirby-card text-center bg-yellow-50 col-span-1 sm:col-span-3 md:col-span-2">
+                <i data-lucide="star" class="w-12 h-12 mx-auto text-yellow-500"></i>
+                <p class="text-4xl sm:text-5xl font-extrabold text-yellow-800 mt-2">${totals.ec}</p>
+                <p class="text-yellow-700 font-semibold">Estrellas de Crédito (EC)</p>
+            </div>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="kirby-card">
+                 <h3 class="text-xl font-bold text-pink-800 mb-4">Desglose de PC por Habilidad</h3>
+                 <canvas id="summaryChart"></canvas>
+            </div>
+            <div class="kirby-card">
+                <h3 class="text-xl font-bold text-pink-800 mb-4">Historial de Transacciones</h3>
+                <div class="space-y-3 max-h-96 overflow-y-auto pr-2">
+                ${student.evaluations.length > 0 ? [...student.evaluations].reverse().map(ev => {
+                    const pcText = ev.pc !== 0 ? `<span class="font-medium ${ev.pc > 0 ? 'text-pink-600' : 'text-red-600'}">${ev.pc > 0 ? '+' : ''}${ev.pc} PC</span>` : '';
+                    const ecText = ev.ec !== 0 ? `<span class="font-medium ${ev.ec > 0 ? 'text-yellow-600' : 'text-red-600'}">${ev.ec > 0 ? '+' : ''}${ev.ec} EC</span>` : '';
+                    const separator = ev.pc !== 0 && ev.ec !== 0 ? ', ' : '';
+
+                    return `
+                    <div class="p-3 bg-slate-50 rounded-lg">
+                        <div class="flex justify-between items-center">
+                            <p class="font-semibold text-slate-800">${ev.activity}</p>
+                            <p class="text-sm font-medium text-slate-600">${ev.date}</p>
+                        </div>
+                        <p class="text-sm my-1"><strong class="text-slate-700">${ev.level}</strong> | ${pcText}${separator}${ecText}</p>
+                    </div>`
+                }).join('') : '<p class="text-sm text-slate-500 p-3 bg-slate-50 rounded-lg">Aún no hay transacciones registradas.</p>'}
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.getElementById('summary-modal').classList.add('visible');
+    lucide.createIcons();
+    createSummaryChart(pcByHabilidad);
+}
+
+function downloadSummary(studentId) {
+    const student = db.students.find(s => s.id === studentId);
+    if (!student) return;
+
+    const totals = calculateTotals(student);
+    const pcByHabilidad = Object.keys(HABILIDADES).reduce((acc, key) => {
+        acc[key] = { name: HABILIDADES[key].name, pc: 0, total: HABILIDADES[key].totalPC };
+        student.evaluations.forEach(ev => {
+            if (ev.habilidad === key) {
+                acc[key].pc += ev.pc;
+            }
+        });
+        return acc;
+    }, {});
+
+    let reportContent = `======================================\n`;
+    reportContent += `  RESUMEN DE PROGRESO - DREAMLAB\n`;
+    reportContent += `======================================\n\n`;
+    reportContent += `Estudiante: ${student.name}\n`;
+    reportContent += `Grupo: ${student.group}\n`;
+    reportContent += `Fecha de Emisión: ${new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' })}\n\n`;
+    
+    reportContent += `--------------------------------------\n`;
+    reportContent += ` RESUMEN GENERAL\n`;
+    reportContent += `--------------------------------------\n`;
+    reportContent += `Puntos de Corazón (PC): ${totals.pc} / 100\n`;
+    reportContent += `Estrellas de Crédito (EC): ${totals.ec}\n\n`;
+
+    reportContent += `--------------------------------------\n`;
+    reportContent += ` DESGLOSE DE PC POR HABILIDAD\n`;
+    reportContent += `--------------------------------------\n`;
+    Object.values(pcByHabilidad).forEach(h => {
+        reportContent += `- ${h.name.padEnd(40, ' ')}: ${String(h.pc).padStart(2)} / ${h.total} PC\n`;
+    });
+    reportContent += `\n`;
+
+    reportContent += `--------------------------------------\n`;
+    reportContent += ` HISTORIAL DE TRANSACCIONES\n`;
+    reportContent += `--------------------------------------\n`;
+    if (student.evaluations.length > 0) {
+        [...student.evaluations].reverse().forEach(ev => {
+            const pcText = ev.pc !== 0 ? `${ev.pc > 0 ? '+' : ''}${ev.pc} PC` : '';
+            const ecText = ev.ec !== 0 ? `${ev.ec > 0 ? '+' : ''}${ev.ec} EC` : '';
+            const separator = ev.pc !== 0 && ev.ec !== 0 ? ', ' : '';
+            
+            reportContent += `[${ev.date}] ${ev.activity} (${ev.level})\n`;
+            reportContent += `    -> ${pcText}${separator}${ecText}\n\n`;
+        });
+    } else {
+        reportContent += `No hay transacciones registradas.\n`;
+    }
+
+    const blob = new Blob([reportContent], { type: 'text/plain;charset=utf-8' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    const safeName = student.name.replace(/ /g, '_').toLowerCase();
+    link.download = `resumen_dreamlab_${safeName}.txt`;
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
+}
+
+function closeModal(modalId) {
+    document.getElementById(modalId).classList.remove('visible');
+    if (summaryChart) {
+        summaryChart.destroy();
+    }
+}
+
+function showToast(message) {
+    const toast = document.getElementById('toast');
+    toast.textContent = message;
+    toast.classList.add('show');
+    setTimeout(() => {
+        toast.classList.remove('show');
+    }, 3000);
+}
+
+function createSummaryChart(data) {
+    const ctx = document.getElementById('summaryChart').getContext('2d');
+    if (summaryChart) summaryChart.destroy();
+    
+    summaryChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: Object.values(data).map(h => h.name),
+            datasets: [{
+                label: 'PC Obtenidos',
+                data: Object.values(data).map(h => h.pc),
+                backgroundColor: 'rgba(236, 72, 153, 0.6)',
+                borderColor: 'rgba(236, 72, 153, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    beginAtZero: true,
+                    title: { display: true, text: 'Puntos de Corazón (PC)' }
+                }
+            },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const habilidadKey = Object.keys(data)[context.dataIndex];
+                            const totalPC = data[habilidadKey].total;
+                            return `PC: ${context.raw} / ${totalPC}`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+</script>
+
+</body>
+</html>
+
+
