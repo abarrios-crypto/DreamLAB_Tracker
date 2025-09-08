@@ -7,9 +7,11 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fredoka+One&display=swap" rel="stylesheet">
     <style>
         body {
             font-family: 'Inter', sans-serif;
@@ -118,6 +120,9 @@
         .toast.show {
             transform: translateX(-50%) translateY(0);
         }
+        .fredoka {
+            font-family: 'Fredoka One', cursive;
+        }
     </style>
 </head>
 <body class="antialiased">
@@ -179,14 +184,18 @@
                                  <p id="selected-student-name" class="text-3xl sm:text-4xl font-extrabold text-slate-800"></p>
                             </div>
                         </div>
+                        
+                        <!-- Kirby Progress Bar -->
+                        <div id="progress-bar-container" class="my-6"></div>
     
                         <!-- EC Management Container -->
                         <div id="ec-management-container" class="mb-6"></div>
                         
                         <!-- Tab Navigation -->
-                        <div class="mb-6 p-1.5 bg-pink-100 rounded-full inline-flex items-center">
+                        <div class="mb-6 p-1.5 bg-pink-100 rounded-full inline-flex flex-wrap items-center">
                             <button class="tab-button active" onclick="switchEvalTab('parcial')">Evaluaciones Parciales</button>
                             <button class="tab-button" onclick="switchEvalTab('final')">Evaluaciones Finales</button>
+                            <button class="tab-button" onclick="switchEvalTab('verificar')">Verificar Certificado</button>
                         </div>
     
                         <!-- Evaluation Tabs -->
@@ -195,6 +204,9 @@
                         </div>
                         <div id="eval-final" class="eval-tab-content hidden grid grid-cols-1 lg:grid-cols-2 gap-6">
                             <!-- Final Evaluation Forms will be rendered here -->
+                        </div>
+                        <div id="eval-verificar" class="eval-tab-content hidden grid grid-cols-1 gap-6">
+                            <!-- Verification content will be rendered here -->
                         </div>
                     </div>
                     <div id="no-student-selected" class="flex h-full items-center justify-center">
@@ -220,6 +232,21 @@
             </div>
             <div id="summary-modal-body" class="overflow-y-auto pr-4">
                  <!-- Summary content will be rendered here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Practice Certificate Modal -->
+    <div id="certificate-modal" class="modal-backdrop">
+        <div class="w-full max-w-lg p-4 modal-content">
+            <div id="certificate-content" class="bg-gradient-to-br from-pink-100 to-blue-100 p-8 rounded-2xl border-4 border-white shadow-2xl text-center" style="color: #5c5470;">
+                <!-- Certificate content will be rendered here -->
+            </div>
+            <div class="mt-4 flex justify-center gap-4">
+                 <button onclick="downloadCertificate()" class="kirby-button kirby-button-primary">
+                    <i data-lucide="download" class="mr-2"></i> Descargar Comprobante
+                </button>
+                <button onclick="closeModal('certificate-modal')" class="kirby-button kirby-button-secondary">Cerrar</button>
             </div>
         </div>
     </div>
@@ -260,10 +287,10 @@ const UNIDADES_TEORICAS = {
 
 const RUBRICAS = {
     constancia: [
-        { level: "Bio-Aprendiz", pc: 5, ec: 0, criteria: "Entrega menos del 60% de actividades y poca participación" },
-        { level: "Bio-Técnico", pc: 10, ec: 0, criteria: "Entrega al menos 60% de actividades; participación limitada" },
-        { level: "Bio-Maestro", pc: 20, ec: 0, criteria: "Entrega casi todas puntuales; participa regularmente" },
-        { level: "Bio-Héroe", pc: 20, ec: 25, criteria: "Además motiva y apoya a compañeros" },
+        { level: "Bio-Aprendiz", pc: 5, ec: 0, criteria: "Menos de 60% de rendimiento general en constancia" },
+        { level: "Bio-Técnico", pc: 10, ec: 0, criteria: "Entre 60% y 79% de rendimiento general en constancia" },
+        { level: "Bio-Maestro", pc: 20, ec: 0, criteria: "Entre 80% y 100% de rendimiento general en constancia" },
+        { level: "Bio-Héroe", pc: 20, ec: 25, criteria: "Rendimiento perfecto y además motiva y apoya a compañeros" },
     ],
     practica: [
         { level: "Bio-Aprendiz", pc: 5, ec: 0, criteria: "Comete errores frecuentes en técnicas; requiere supervisión" },
@@ -307,6 +334,19 @@ function loadData() {
     const savedData = localStorage.getItem('dreamlab_data');
     if (savedData) {
         db = JSON.parse(savedData);
+        // Ensure new data structures are present for older saved data
+        db.students.forEach(s => {
+            if (!s.constancia_details) {
+                s.constancia_details = {
+                    total_clases: 0, asistencias: 0, inasistencias: 0, justificantes: 0, retardos: 0,
+                    total_tareas: 0, entregadas: 0, retardos_tareas: 0, no_entregadas: 0,
+                    participacion: 'nula', bio_heroe_extra: false
+                };
+            }
+        });
+        if (!db.certificate_codes) {
+            db.certificate_codes = [];
+        }
     } else {
         // This is the initial setup if no data is saved
         const studentNames_5_1 = [
@@ -336,15 +376,22 @@ function loadData() {
         ];
 
         let studentIdCounter = 1;
+        const constancia_details_default = {
+            total_clases: 0, asistencias: 0, inasistencias: 0, justificantes: 0, retardos: 0,
+            total_tareas: 0, entregadas: 0, retardos_tareas: 0, no_entregadas: 0,
+            participacion: 'nula', bio_heroe_extra: false
+        };
+
         const allStudents = [
-            ...studentNames_5_1.map(name => ({ id: studentIdCounter++, name, group: '5-1', evaluations: [], parciales: { practicas: {}, teoricos: {} } })),
-            ...studentNames_5_2.map(name => ({ id: studentIdCounter++, name, group: '5-2', evaluations: [], parciales: { practicas: {}, teoricos: {} } })),
-            ...studentNames_5_3.map(name => ({ id: studentIdCounter++, name, group: '5-3', evaluations: [], parciales: { practicas: {}, teoricos: {} } }))
+            ...studentNames_5_1.map(name => ({ id: studentIdCounter++, name, group: '5-1', evaluations: [], parciales: { practicas: {}, teoricos: {} }, constancia_details: {...constancia_details_default} })),
+            ...studentNames_5_2.map(name => ({ id: studentIdCounter++, name, group: '5-2', evaluations: [], parciales: { practicas: {}, teoricos: {} }, constancia_details: {...constancia_details_default} })),
+            ...studentNames_5_3.map(name => ({ id: studentIdCounter++, name, group: '5-3', evaluations: [], parciales: { practicas: {}, teoricos: {} }, constancia_details: {...constancia_details_default} }))
         ].map(student => ({ ...student, avatar: generateAvatarUrl(student.name) }));
 
         db = {
             students: allStudents,
-            instructor: { name: "M.C. Adriana A. Barrios Rodríguez", avatar: "https://placehold.co/40x40/d1fae5/064e3b?text=AB" }
+            instructor: { name: "M.C. Adriana A. Barrios Rodríguez", avatar: "https://placehold.co/40x40/d1fae5/064e3b?text=AB" },
+            certificate_codes: []
         };
         saveData(); // Save the initial state
     }
@@ -427,9 +474,34 @@ function renderStudentList() {
 
 
 function renderEvaluationForms() {
+    renderProgressBar();
     renderECManagement();
     renderPartialEvalForms();
     renderFinalEvalForms();
+    renderVerificationTab();
+}
+
+function renderProgressBar() {
+    const student = db.students.find(s => s.id === selectedStudentId);
+    if (!student) return;
+
+    const totals = calculateTotals(student);
+    const progressPercentage = Math.min(100, (totals.pc / 100) * 100);
+
+    const container = document.getElementById('progress-bar-container');
+    container.innerHTML = `
+        <h3 class="text-xl font-bold text-pink-800 mb-2">Viaje de la Estrella</h3>
+        <div class="w-full bg-pink-100 rounded-full h-8 relative p-1 border-2 border-pink-200 shadow-inner overflow-hidden">
+            <div class="bg-gradient-to-r from-pink-200 to-pink-300 h-full rounded-full" style="position: absolute; top: 0; left: 0; width: 100%; z-index: 1;"></div>
+            <div id="progress-bar-fill" class="bg-gradient-to-r from-yellow-300 to-amber-400 h-full rounded-full transition-all duration-500 ease-out relative z-index-2" style="width: ${progressPercentage}%;"></div>
+            <div id="progress-star" class="absolute top-1/2 transform -translate-y-1/2 transition-all duration-500 ease-out" style="left: ${progressPercentage}%; z-index: 3;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="#facc15" stroke="#c2410c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-star" style="filter: drop-shadow(0 0 3px rgba(251, 191, 36, 0.7)); transform: translateX(-50%);">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                </svg>
+            </div>
+        </div>
+        <p class="text-right mt-2 font-bold text-slate-700 text-lg">${totals.pc} / 100 PC</p>
+    `;
 }
 
 function renderECManagement() {
@@ -457,7 +529,7 @@ function renderECManagement() {
                     </form>
                 </div>
                 <div class="bg-pink-50 p-4 rounded-lg text-center">
-                    <p class="text-pink-800 font-semibold">Balance Actual de EC</p>
+                    <p class="text-pink-800 font-semibold">Bóveda de EC ✨⭐</p>
                     <p class="text-4xl sm:text-5xl font-extrabold text-pink-700 my-2">${totals.ec}</p>
                     <p class="text-sm text-slate-500 mb-4">Se necesitan 100 EC para obtener 5 PC.</p>
                     <button onclick="convertECtoPC()" class="kirby-button kirby-button-primary w-full" ${!canConvert ? 'disabled' : ''}>
@@ -487,18 +559,26 @@ function renderPartialEvalForms() {
             <p class="text-sm text-slate-500 mb-4">Registre el nivel de cada práctica. El promedio final se calculará cuando todas estén completas.</p>
             <form id="form-practica" onsubmit="saveParciales(event, 'practicas')">
                 <div class="space-y-3 max-h-80 overflow-y-auto pr-2 mb-4">
-                    ${Object.keys(PRACTICAS).map(key => `
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1">${PRACTICAS[key]}</label>
-                            <select name="${key}" class="w-full p-2 border border-slate-300 rounded-lg bg-white" ${hasPracticaFinal ? 'disabled' : ''}>
-                                <option value="0" ${!student.parciales.practicas[key] ? 'selected' : ''}>Sin calificar</option>
-                                <option value="1" ${student.parciales.practicas[key] == 1 ? 'selected' : ''}>Bio-Aprendiz</option>
-                                <option value="2" ${student.parciales.practicas[key] == 2 ? 'selected' : ''}>Bio-Técnico</option>
-                                <option value="3" ${student.parciales.practicas[key] == 3 ? 'selected' : ''}>Bio-Maestro</option>
-                                <option value="4" ${student.parciales.practicas[key] == 4 ? 'selected' : ''}>Bio-Héroe</option>
-                            </select>
+                    ${Object.keys(PRACTICAS).map(key => {
+                        const practiceLevel = student.parciales.practicas[key];
+                        const isGraded = practiceLevel && practiceLevel > 0;
+                        return `
+                        <div class="flex items-center gap-2">
+                            <div class="flex-grow">
+                                <label class="block text-sm font-medium text-slate-700 mb-1">${PRACTICAS[key]}</label>
+                                <select name="${key}" class="w-full p-2 border border-slate-300 rounded-lg bg-white" ${hasPracticaFinal ? 'disabled' : ''}>
+                                    <option value="0" ${!practiceLevel ? 'selected' : ''}>Sin calificar</option>
+                                    <option value="1" ${practiceLevel == 1 ? 'selected' : ''}>Bio-Aprendiz</option>
+                                    <option value="2" ${practiceLevel == 2 ? 'selected' : ''}>Bio-Técnico</option>
+                                    <option value="3" ${practiceLevel == 3 ? 'selected' : ''}>Bio-Maestro</option>
+                                    <option value="4" ${practiceLevel == 4 ? 'selected' : ''}>Bio-Héroe</option>
+                                </select>
+                            </div>
+                            <button type="button" class="mt-6 p-2 rounded-full kirby-button-secondary" onclick="generatePracticeCertificate('${key}')" title="Emitir Comprobante" ${!isGraded || hasPracticaFinal ? 'disabled' : ''}>
+                                <i data-lucide="award"></i>
+                            </button>
                         </div>
-                    `).join('')}
+                    `}).join('')}
                 </div>
                 <div class="flex flex-col sm:flex-row gap-2">
                     <button type="submit" class="kirby-button kirby-button-secondary w-full" ${hasPracticaFinal ? 'disabled' : ''}>Guardar Avances</button>
@@ -532,6 +612,7 @@ function renderPartialEvalForms() {
             </form>
         </div>
     `;
+    lucide.createIcons();
 }
 
 function renderFinalEvalForms() {
@@ -541,28 +622,60 @@ function renderFinalEvalForms() {
     const hasConstancia = student.evaluations.some(e => e.habilidad === 'constancia');
     const hasInterpretacion = student.evaluations.some(e => e.habilidad === 'interpretacion');
     const hasProyecto = student.evaluations.some(e => e.habilidad === 'analisis');
+    const d = student.constancia_details;
 
     container.innerHTML = `
         <!-- Constancia -->
-        <div class="kirby-card">
+        <div class="kirby-card lg:col-span-2">
             <h3 class="text-xl font-bold text-pink-800 mb-4">${HABILIDADES.constancia.name}</h3>
-            <form id="form-constancia" onsubmit="submitFinal(event, 'constancia')">
-                <p class="text-sm text-slate-500 mb-4">Evaluación única al final del semestre.</p>
-                <div class="space-y-2 mb-4">
-                    ${RUBRICAS.constancia.map((level, i) => `
-                        <div>
-                            <input type="radio" name="level" value="${i}" id="constancia-level-${i}" class="hidden peer" required ${hasConstancia ? 'disabled' : ''}>
-                            <label for="constancia-level-${i}" class="block p-3 border border-slate-200 rounded-lg cursor-pointer peer-checked:border-pink-500 peer-checked:bg-pink-50">
-                                <p class="font-bold text-pink-700">${level.level}</p>
-                                <p class="text-sm text-slate-600">${level.criteria}</p>
-                            </label>
+            <form id="form-constancia" onsubmit="event.preventDefault(); saveConstanciaDetails();">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <!-- Asistencia -->
+                    <div>
+                        <h4 class="font-semibold text-slate-700 mb-2">Asistencia</h4>
+                        <div class="space-y-2">
+                           <div><label class="text-sm font-medium">Total de Clases del Semestre</label><input type="number" name="total_clases" value="${d.total_clases}" class="w-full p-2 mt-1 border rounded-lg" ${hasConstancia ? 'disabled' : ''}></div>
+                           <div><label class="text-sm font-medium">Asistencias</label><input type="number" name="asistencias" value="${d.asistencias}" class="w-full p-2 mt-1 border rounded-lg" ${hasConstancia ? 'disabled' : ''}></div>
+                           <div><label class="text-sm font-medium">Inasistencias</label><input type="number" name="inasistencias" value="${d.inasistencias}" class="w-full p-2 mt-1 border rounded-lg" ${hasConstancia ? 'disabled' : ''}></div>
+                           <div><label class="text-sm font-medium">Justificantes</label><input type="number" name="justificantes" value="${d.justificantes}" class="w-full p-2 mt-1 border rounded-lg" ${hasConstancia ? 'disabled' : ''}></div>
+                           <div><label class="text-sm font-medium">Retardos</label><input type="number" name="retardos" value="${d.retardos}" class="w-full p-2 mt-1 border rounded-lg" ${hasConstancia ? 'disabled' : ''}></div>
                         </div>
-                    `).join('')}
+                    </div>
+                    <!-- Tareas -->
+                    <div>
+                        <h4 class="font-semibold text-slate-700 mb-2">Tareas</h4>
+                        <div class="space-y-2">
+                           <div><label class="text-sm font-medium">Total de Tareas del Semestre</label><input type="number" name="total_tareas" value="${d.total_tareas}" class="w-full p-2 mt-1 border rounded-lg" ${hasConstancia ? 'disabled' : ''}></div>
+                           <div><label class="text-sm font-medium">Entregadas a tiempo</label><input type="number" name="entregadas" value="${d.entregadas}" class="w-full p-2 mt-1 border rounded-lg" ${hasConstancia ? 'disabled' : ''}></div>
+                           <div><label class="text-sm font-medium">Entregas con retardo</label><input type="number" name="retardos_tareas" value="${d.retardos_tareas}" class="w-full p-2 mt-1 border rounded-lg" ${hasConstancia ? 'disabled' : ''}></div>
+                           <div><label class="text-sm font-medium">No entregadas</label><input type="number" name="no_entregadas" value="${d.no_entregadas}" class="w-full p-2 mt-1 border rounded-lg" ${hasConstancia ? 'disabled' : ''}></div>
+                        </div>
+                    </div>
+                    <!-- Participación -->
+                    <div>
+                        <h4 class="font-semibold text-slate-700 mb-2">Participación</h4>
+                        <select name="participacion" class="w-full p-2 border rounded-lg bg-white" ${hasConstancia ? 'disabled' : ''}>
+                            <option value="nula" ${d.participacion === 'nula' ? 'selected' : ''}>Nula</option>
+                            <option value="poca" ${d.participacion === 'poca' ? 'selected' : ''}>Poca</option>
+                            <option value="frecuente" ${d.participacion === 'frecuente' ? 'selected' : ''}>Frecuente</option>
+                            <option value="persistente" ${d.participacion === 'persistente' ? 'selected' : ''}>Persistente</option>
+                        </select>
+                         <div class="mt-4 flex items-start">
+                            <input type="checkbox" id="bio-heroe-extra" name="bio_heroe_extra" class="mt-1 h-4 w-4 text-pink-600 border-gray-300 rounded focus:ring-pink-500" ${d.bio_heroe_extra ? 'checked' : ''} ${hasConstancia ? 'disabled' : ''}>
+                            <div class="ml-3 text-sm">
+                                <label for="bio-heroe-extra" class="font-medium text-gray-700">Motiva y apoya a compañeros</label>
+                                <p class="text-gray-500">(Requisito para Bio-Héroe)</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                ${hasConstancia
-                    ? `<button type="button" onclick="modifyEvaluation('constancia')" class="kirby-button kirby-button-secondary w-full">Modificar Evaluación</button>`
-                    : `<button type="submit" class="kirby-button kirby-button-primary w-full">Registrar Constancia</button>`
-                }
+                <div class="mt-6 flex flex-col sm:flex-row gap-2">
+                    <button type="submit" class="kirby-button kirby-button-secondary w-full" ${hasConstancia ? 'disabled' : ''}>Guardar Avances</button>
+                     ${hasConstancia
+                        ? `<button type="button" onclick="modifyEvaluation('constancia')" class="kirby-button kirby-button-secondary w-full">Modificar Evaluación</button>`
+                        : `<button type="button" onclick="calculateAndSubmitConstancia()" class="kirby-button kirby-button-primary w-full">Calcular Nivel de Constancia</button>`
+                    }
+                </div>
             </form>
         </div>
         <!-- Examen Práctico -->
@@ -578,10 +691,10 @@ function renderFinalEvalForms() {
             </form>
         </div>
         <!-- Proyecto Final -->
-        <div class="kirby-card lg:col-span-2">
+        <div class="kirby-card">
             <h3 class="text-xl font-bold text-pink-800 mb-4">Proyecto Final</h3>
             <form id="form-proyecto" onsubmit="submitProyecto(event)">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="grid grid-cols-1 gap-6">
                     <div>
                         <h4 class="font-semibold text-slate-700 mb-2">${HABILIDADES.analisis.name}</h4>
                         <div class="space-y-2">
@@ -620,6 +733,40 @@ function renderFinalEvalForms() {
     `;
 }
 
+function renderVerificationTab() {
+    const container = document.getElementById('eval-verificar');
+    container.innerHTML = `
+        <div class="kirby-card">
+            <h3 class="text-xl font-bold text-pink-800 mb-4">Verificar Autenticidad de Comprobante</h3>
+            <form id="form-verify" onsubmit="event.preventDefault(); verifyCertificateCode();">
+                <div class="flex flex-col sm:flex-row gap-2">
+                    <input id="verification-code-input" type="text" placeholder="Ingrese el código de verificación" class="w-full p-2 border border-slate-300 rounded-lg uppercase" required>
+                    <button type="submit" class="kirby-button kirby-button-primary w-full sm:w-auto">
+                        <i data-lucide="scan-line" class="mr-2"></i>Verificar
+                    </button>
+                </div>
+            </form>
+            <div id="verification-result" class="mt-4"></div>
+        </div>
+        <div class="kirby-card">
+            <h3 class="text-xl font-bold text-pink-800 mb-4">Historial de Certificados Emitidos</h3>
+            <div class="max-h-96 overflow-y-auto pr-2 space-y-2">
+                ${db.certificate_codes.length > 0 ? [...db.certificate_codes].reverse().map(c => `
+                    <div class="p-3 bg-slate-50 rounded-lg text-sm">
+                        <div class="flex justify-between items-center">
+                            <p class="font-bold text-slate-800">${c.studentName}</p>
+                            <p class="font-mono text-pink-700 bg-pink-100 px-2 py-0.5 rounded">${c.code}</p>
+                        </div>
+                        <p class="text-slate-600">${c.practiceName} - <strong>${c.level}</strong></p>
+                        <p class="text-xs text-slate-500 mt-1">Emitido: ${c.date}</p>
+                    </div>
+                `).join('') : '<p class="text-sm text-slate-500">No se han emitido certificados.</p>'}
+            </div>
+        </div>
+    `;
+    lucide.createIcons();
+}
+
 // --- EVENT HANDLERS & LOGIC ---
 
 function selectStudent(studentId) {
@@ -644,6 +791,50 @@ function switchEvalTab(tabId) {
     document.querySelector(`.tab-button[onclick="switchEvalTab('${tabId}')"]`).classList.add('active');
     document.querySelectorAll('.eval-tab-content').forEach(c => c.classList.add('hidden'));
     document.getElementById(`eval-${tabId}`).classList.remove('hidden');
+    
+    if (tabId === 'verificar') {
+        renderVerificationTab();
+    }
+}
+
+function verifyCertificateCode() {
+    const codeInput = document.getElementById('verification-code-input').value.trim().toUpperCase();
+    const resultContainer = document.getElementById('verification-result');
+    if (!codeInput) {
+        resultContainer.innerHTML = '';
+        return;
+    }
+
+    const record = db.certificate_codes.find(c => c.code === codeInput);
+    
+    if (record) {
+        resultContainer.innerHTML = `
+            <div class="p-4 bg-green-50 border-l-4 border-green-500 rounded-r-lg">
+                <div class="flex items-center gap-3">
+                    <i data-lucide="check-circle" class="w-8 h-8 text-green-600"></i>
+                    <div>
+                        <p class="font-bold text-green-800">Certificado Válido</p>
+                        <p class="text-sm text-slate-700">Emitido a: <strong>${record.studentName}</strong></p>
+                        <p class="text-sm text-slate-600">Práctica: ${record.practiceName} (${record.level})</p>
+                        <p class="text-xs text-slate-500">Fecha: ${record.date}</p>
+                    </div>
+                </div>
+            </div>
+        `;
+    } else {
+         resultContainer.innerHTML = `
+            <div class="p-4 bg-red-50 border-l-4 border-red-500 rounded-r-lg">
+                <div class="flex items-center gap-3">
+                    <i data-lucide="x-circle" class="w-8 h-8 text-red-600"></i>
+                    <div>
+                        <p class="font-bold text-red-800">Certificado Inválido</p>
+                        <p class="text-sm text-slate-700">El código no se encontró en el registro. El certificado puede haber sido alterado.</p>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    lucide.createIcons();
 }
 
 function calculateTotals(student) {
@@ -714,6 +905,7 @@ function addOptionalEC(event) {
     saveData();
     renderStudentList();
     renderECManagement();
+    renderProgressBar();
     showToast(`${amount} EC añadidos a ${student.name}.`);
     form.reset();
 }
@@ -737,6 +929,7 @@ function convertECtoPC() {
     saveData();
     renderStudentList();
     renderECManagement();
+    renderProgressBar();
     showToast(`Canje realizado: -100 EC, +5 PC para ${student.name}.`);
 }
 
@@ -786,6 +979,71 @@ function calculateFinalTeoria() {
         addEvaluation('teoria', levelData, `Promedio Final Teórico (${avg.toFixed(2)})`);
     }
 }
+
+function saveConstanciaDetails() {
+    const student = db.students.find(s => s.id === selectedStudentId);
+    const form = document.getElementById('form-constancia');
+    const formData = new FormData(form);
+
+    student.constancia_details.total_clases = parseInt(formData.get('total_clases')) || 0;
+    student.constancia_details.asistencias = parseInt(formData.get('asistencias')) || 0;
+    student.constancia_details.inasistencias = parseInt(formData.get('inasistencias')) || 0;
+    student.constancia_details.justificantes = parseInt(formData.get('justificantes')) || 0;
+    student.constancia_details.retardos = parseInt(formData.get('retardos')) || 0;
+    student.constancia_details.total_tareas = parseInt(formData.get('total_tareas')) || 0;
+    student.constancia_details.entregadas = parseInt(formData.get('entregadas')) || 0;
+    student.constancia_details.retardos_tareas = parseInt(formData.get('retardos_tareas')) || 0;
+    student.constancia_details.no_entregadas = parseInt(formData.get('no_entregadas')) || 0;
+    student.constancia_details.participacion = formData.get('participacion');
+    student.constancia_details.bio_heroe_extra = form.elements['bio_heroe_extra'].checked;
+    
+    saveData();
+    showToast('Avances de constancia guardados.');
+}
+
+
+function calculateAndSubmitConstancia() {
+    saveConstanciaDetails(); // Save latest values first
+    const student = db.students.find(s => s.id === selectedStudentId);
+    const d = student.constancia_details;
+
+    if (d.total_clases <= 0) {
+        showToast("Error: Ingrese el total de clases del semestre.");
+        return;
+    }
+     if (d.total_tareas <= 0) {
+        showToast("Error: Ingrese el total de tareas del semestre.");
+        return;
+    }
+
+    // Asistencia Score (40%)
+    const effectiveAbsences = d.inasistencias + Math.floor(d.retardos / 3);
+    const effectiveAttendance = ((d.total_clases - effectiveAbsences) / d.total_clases) * 100;
+    const asistenciaScore = (Math.max(0, effectiveAttendance) / 100) * 40;
+
+    // Tareas Score (40%)
+    const effectiveTareas = d.entregadas + (d.retardos_tareas * 0.5); // Late tasks worth half
+    const tareasScore = (effectiveTareas / d.total_tareas) * 40;
+
+    // Participacion Score (20%)
+    let participacionScore = 0;
+    switch(d.participacion) {
+        case 'poca': participacionScore = 5; break;
+        case 'frecuente': participacionScore = 15; break;
+        case 'persistente': participacionScore = 20; break;
+    }
+
+    const totalScore = Math.max(0, asistenciaScore) + Math.max(0, tareasScore) + participacionScore;
+
+    let levelIndex;
+    if (totalScore < 60) levelIndex = 0; // Bio-Aprendiz
+    else if (totalScore < 80) levelIndex = 1; // Bio-Técnico
+    else if (totalScore < 100 || (totalScore >= 100 && !d.bio_heroe_extra)) levelIndex = 2; // Bio-Maestro
+    else levelIndex = 3; // Bio-Héroe only if score is 100 AND extra is checked
+
+    addEvaluation('constancia', RUBRICAS.constancia[levelIndex], `Constancia (${totalScore.toFixed(1)}%)`);
+}
+
 
 function submitFinal(event, habilidad) {
     event.preventDefault();
@@ -963,6 +1221,80 @@ function closeModal(modalId) {
         summaryChart.destroy();
     }
 }
+
+function generatePracticeCertificate(practiceKey) {
+    const student = db.students.find(s => s.id === selectedStudentId);
+    const practiceLevelIndex = student.parciales.practicas[practiceKey];
+    if (!practiceLevelIndex || practiceLevelIndex == 0) return;
+
+    const levelData = RUBRICAS.practica[practiceLevelIndex - 1]; // -1 because array is 0-indexed
+    const practiceName = PRACTICAS[practiceKey];
+    const levelStars = '⭐'.repeat(practiceLevelIndex);
+
+    const uniqueCode = crypto.randomUUID().split('-')[0].toUpperCase();
+    const certificateRecord = {
+        code: uniqueCode,
+        studentId: student.id,
+        studentName: student.name,
+        practiceKey: practiceKey,
+        practiceName: practiceName,
+        level: levelData.level,
+        date: new Date().toLocaleDateString('es-MX')
+    };
+    db.certificate_codes.push(certificateRecord);
+    saveData();
+
+    const container = document.getElementById('certificate-content');
+    container.innerHTML = `
+        <h2 class="fredoka text-3xl font-bold tracking-wide" style="color: #F571A3;">Comprobante de Habilidad</h2>
+        <p class="text-lg mt-1 font-semibold">${HABILIDADES.practica.name}</p>
+        <div class="my-6">
+            <p class="text-sm uppercase tracking-wider">Estudiante</p>
+            <p class="text-2xl font-bold">${student.name}</p>
+        </div>
+        <div class="bg-white/70 rounded-lg p-4">
+            <p class="text-sm uppercase tracking-wider">Práctica Realizada</p>
+            <p class="text-xl font-semibold">${practiceName}</p>
+        </div>
+        <div class="my-6">
+            <p class="text-5xl">${levelStars}</p>
+            <p class="fredoka text-4xl mt-2" style="color: #6a4c9c;">${levelData.level}</p>
+            <p class="mt-2 max-w-sm mx-auto">"${levelData.criteria}"</p>
+        </div>
+        <div class="text-xs text-slate-500 mt-6">
+            <p>Emitido por: ${db.instructor.name}</p>
+            <p>Fecha de Emisión: ${new Date().toLocaleDateString('es-MX')}</p>
+        </div>
+        <div class="mt-4 pt-4 border-t-2 border-dashed border-white/80">
+             <p class="text-xs font-semibold">CÓDIGO DE VERIFICACIÓN</p>
+             <p class="font-mono text-lg tracking-widest font-bold">${uniqueCode}</p>
+        </div>
+    `;
+    
+    document.getElementById('certificate-modal').classList.add('visible');
+    lucide.createIcons();
+}
+
+function downloadCertificate() {
+    const certificate = document.getElementById('certificate-content');
+    const student = db.students.find(s => s.id === selectedStudentId);
+    const safeName = student.name.replace(/ /g, '_').toLowerCase();
+    
+    html2canvas(certificate, { 
+        backgroundColor: null, // Transparent background for canvas
+        scale: 2 // Higher resolution
+    }).then(canvas => {
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jspdf.jsPDF({
+            orientation: 'portrait',
+            unit: 'px',
+            format: [canvas.width, canvas.height]
+        });
+        pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+        pdf.save(`comprobante_${safeName}.pdf`);
+    });
+}
+
 
 function showToast(message) {
     const toast = document.getElementById('toast');
