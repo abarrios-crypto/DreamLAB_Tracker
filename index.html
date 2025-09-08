@@ -179,8 +179,14 @@
 
                 <!-- Global Actions -->
                 <div class="mb-4 px-2 space-y-2">
-                    <button id="program-view-btn" onclick="showProgramView()" class="kirby-button kirby-button-secondary w-full">
+                    <button onclick="showProgramView()" class="kirby-button kirby-button-secondary w-full">
                         <i data-lucide="book-open" class="mr-2"></i>Programa del Curso
+                    </button>
+                    <button onclick="showTasksView()" class="kirby-button kirby-button-secondary w-full">
+                        <i data-lucide="check-square" class="mr-2"></i>Tareas y Actividades
+                    </button>
+                     <button onclick="showStudentManagementView()" class="kirby-button kirby-button-secondary w-full">
+                        <i data-lucide="users" class="mr-2"></i>Gestionar Alumnos
                     </button>
                     <button id="group-report-btn" onclick="generateGroupReport()" class="kirby-button kirby-button-primary w-full" disabled title="Seleccione un grupo para generar el informe">
                         <i data-lucide="file-text" class="mr-2"></i>Generar Informe
@@ -213,9 +219,13 @@
                     </div>
                     
                     <!-- Program View -->
-                    <div id="program-content" class="hidden">
-                        <!-- Program content will be rendered here -->
-                    </div>
+                    <div id="program-content" class="hidden"></div>
+                    
+                    <!-- Tasks View -->
+                    <div id="tasks-content" class="hidden"></div>
+                    
+                    <!-- Student Management View -->
+                    <div id="student-management-content" class="hidden"></div>
 
                     <!-- Evaluation View -->
                     <div id="evaluation-content" class="hidden">
@@ -253,8 +263,8 @@
                         <div class="flex h-full items-center justify-center">
                             <div class="text-center">
                                 <i data-lucide="users" class="mx-auto w-24 h-24 text-pink-300"></i>
-                                <h2 class="mt-4 text-2xl font-bold text-pink-700">Selecciona un estudiante o el programa del curso</h2>
-                                <p class="text-slate-500">Elige un estudiante para registrar sus evaluaciones o revisa el avance global del programa.</p>
+                                <h2 class="mt-4 text-2xl font-bold text-pink-700">Selecciona un estudiante o una opción global</h2>
+                                <p class="text-slate-500">Elige un estudiante para registrar sus evaluaciones o revisa el avance del programa.</p>
                             </div>
                         </div>
                     </div>
@@ -291,6 +301,11 @@
                 <button onclick="closeModal('certificate-modal')" class="kirby-button kirby-button-secondary">Cerrar</button>
             </div>
         </div>
+    </div>
+    
+    <!-- Edit Task Modal -->
+    <div id="edit-task-modal" class="modal-backdrop">
+        <!-- Edit Task Modal Content will be rendered here -->
     </div>
     
     <!-- Toast Notification -->
@@ -436,6 +451,9 @@ function loadData() {
         if (!db.courseProgram) {
             db.courseProgram = courseProgramData;
         }
+        if (!db.tasks) {
+            db.tasks = [];
+        }
     } else {
         // This is the initial setup if no data is saved
         const studentNames_5_1 = [
@@ -481,7 +499,8 @@ function loadData() {
             students: allStudents,
             instructor: { name: "M.C. Adriana A. Barrios Rodríguez", avatar: "https://placehold.co/40x40/d1fae5/064e3b?text=AB" },
             certificate_codes: [],
-            courseProgram: courseProgramData
+            courseProgram: courseProgramData,
+            tasks: []
         };
         saveData(); // Save the initial state
     }
@@ -501,6 +520,7 @@ function generateAvatarUrl(name) {
 let db;
 let selectedStudentId = null;
 let summaryChart = null;
+let editingTaskId = null;
 
 // --- INITIALIZATION ---
 document.addEventListener('DOMContentLoaded', () => {
@@ -901,6 +921,8 @@ function selectStudent(studentId) {
     selectedStudentId = studentId;
     document.getElementById('evaluation-content').classList.remove('hidden');
     document.getElementById('program-content').classList.add('hidden');
+    document.getElementById('tasks-content').classList.add('hidden');
+    document.getElementById('student-management-content').classList.add('hidden');
     document.getElementById('no-student-selected').classList.add('hidden');
     
     const student = db.students.find(s => s.id === studentId);
@@ -914,20 +936,6 @@ function selectStudent(studentId) {
     renderStudentList();
     renderEvaluationForms();
     switchEvalTab('evaluaciones');
-}
-
-function showProgramView() {
-    selectedStudentId = null;
-    document.getElementById('evaluation-content').classList.add('hidden');
-    document.getElementById('program-content').classList.remove('hidden');
-    document.getElementById('no-student-selected').classList.add('hidden');
-    
-    if (window.innerWidth < 768) {
-        toggleMenu();
-    }
-    
-    renderStudentList();
-    renderProgramView();
 }
 
 function switchEvalTab(tabId) {
@@ -1606,68 +1614,13 @@ function createSummaryChart(data) {
     });
 }
 
-function renderProgramView() {
-    const container = document.getElementById('program-content');
-    
-    const allTopics = db.courseProgram.flatMap(unit => unit.topics);
-    const completedTopics = allTopics.filter(topic => topic.completed).length;
-    const totalTopics = allTopics.length;
-    const progressPercentage = totalTopics > 0 ? (completedTopics / totalTopics) * 100 : 0;
-    
-    let programHTML = `
-        <div class="flex flex-col md:flex-row gap-8">
-            <!-- Vertical Progress Bar -->
-            <div class="w-full md:w-24 flex flex-row md:flex-col items-center justify-center gap-4">
-                 <h3 class="text-xl font-bold text-pink-800 md:mb-4 [writing-mode:vertical-lr] md:[writing-mode:horizontal-tb] rotate-180 md:rotate-0">Avance</h3>
-                 <div class="h-8 md:h-full w-full md:w-8 bg-pink-100 rounded-full relative p-1 border-2 border-pink-200 shadow-inner overflow-hidden flex md:flex-col">
-                    <div class="bg-gradient-to-b from-yellow-300 to-amber-400 w-full rounded-full transition-all duration-500 ease-out" style="height: ${progressPercentage}%;"></div>
-                    <div class="absolute left-1/2 md:left-1/2 top-0 md:top-0 transform -translate-x-1/2 md:-translate-x-1/2 transition-all duration-500 ease-out" style="top: ${progressPercentage}%;">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="#facc15" stroke="#c2410c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-star" style="filter: drop-shadow(0 0 3px rgba(251, 191, 36, 0.7)); transform: translateY(-50%);">
-                            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                        </svg>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Program Units -->
-            <div class="flex-grow">
-                <h2 class="fredoka text-3xl sm:text-4xl font-extrabold text-slate-800 mb-6" style="color: var(--bubblegum-pink);">Avance Programático</h2>
-                <div class="space-y-4">
-    `;
-
-    db.courseProgram.forEach((unit, unitIndex) => {
-        programHTML += `
-            <details class="unit-card overflow-hidden" ${unitIndex === 0 ? 'open' : ''}>
-                <summary class="flex justify-between items-center cursor-pointer p-4">
-                    <h3 class="text-xl fredoka">${unit.unit}</h3>
-                    <i data-lucide="chevron-down" class="transition-transform duration-300"></i>
-                </summary>
-                <div class="p-4 border-t-2 border-pink-100 space-y-4">
-        `;
-        unit.topics.forEach((topic, topicIndex) => {
-            programHTML += `
-                <div class="p-4 bg-slate-50 rounded-lg">
-                    <div class="flex items-start">
-                        <input type="checkbox" id="topic-${unitIndex}-${topicIndex}" onchange="toggleTopic(${unitIndex}, ${topicIndex})" class="mt-1 h-5 w-5 text-pink-600 border-gray-300 rounded focus:ring-pink-500" ${topic.completed ? 'checked' : ''}>
-                        <label for="topic-${unitIndex}-${topicIndex}" class="ml-3 text-md font-medium text-slate-700">${topic.name}</label>
-                    </div>
-                    <textarea onblur="saveNote(${unitIndex}, ${topicIndex}, this.value)" class="mt-2 w-full p-2 border border-slate-200 rounded-lg text-sm" placeholder="Añadir Nota">${topic.notes}</textarea>
-                </div>
-            `;
-        });
-        programHTML += `</div></details>`;
-    });
-
-    programHTML += `</div></div></div>`;
-    container.innerHTML = programHTML;
-    lucide.createIcons();
-}
-
 // --- PROGRAM VIEW FUNCTIONS ---
 function showProgramView() {
     selectedStudentId = null;
     document.getElementById('evaluation-content').classList.add('hidden');
     document.getElementById('program-content').classList.remove('hidden');
+    document.getElementById('tasks-content').classList.add('hidden');
+    document.getElementById('student-management-content').classList.add('hidden');
     document.getElementById('no-student-selected').classList.add('hidden');
     
     if (window.innerWidth < 768) {
@@ -1680,6 +1633,7 @@ function showProgramView() {
 
 function renderProgramView() {
     const container = document.getElementById('program-content');
+    
     let programHTML = `
         <div class="flex flex-col md:flex-row gap-8">
             <!-- Vertical Progress Bar -->
@@ -1754,6 +1708,392 @@ function saveNote(unitIndex, topicIndex, newNote) {
     db.courseProgram[unitIndex].topics[topicIndex].notes = newNote;
     saveData();
     showToast('Nota guardada.');
+}
+
+// --- TASKS VIEW FUNCTIONS ---
+function showTasksView() {
+    selectedStudentId = null;
+    document.getElementById('evaluation-content').classList.add('hidden');
+    document.getElementById('program-content').classList.add('hidden');
+    document.getElementById('tasks-content').classList.remove('hidden');
+    document.getElementById('student-management-content').classList.add('hidden');
+    document.getElementById('no-student-selected').classList.add('hidden');
+
+    if (window.innerWidth < 768) {
+        toggleMenu();
+    }
+
+    renderStudentList();
+    renderTasksView();
+}
+
+function renderTasksView() {
+    const container = document.getElementById('tasks-content');
+    const groupColors = { '5-1': 'bg-red-100 text-red-800', '5-2': 'bg-blue-100 text-blue-800', '5-3': 'bg-green-100 text-green-800' };
+    container.innerHTML = `
+        <h2 class="fredoka text-3xl sm:text-4xl font-extrabold text-slate-800 mb-6" style="color: var(--bubblegum-pink);">Tareas y Actividades</h2>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div class="kirby-card">
+                <h3 class="text-xl font-bold text-pink-800 mb-4">Añadir Nueva Tarea</h3>
+                <form id="form-add-task" onsubmit="addNewTask(event)">
+                    <div class="space-y-4">
+                        <div>
+                            <label for="task-name" class="block text-sm font-medium text-slate-700">Descripción de la Tarea</label>
+                            <textarea id="task-name" name="name" rows="3" class="mt-1 w-full p-2 border border-slate-300 rounded-lg" required></textarea>
+                        </div>
+                        
+                        <div>
+                            <p class="text-sm font-medium text-slate-700">Asignar a Grupos y Definir Fechas</p>
+                            <div id="task-group-assignments" class="mt-2 space-y-2">
+                                <!-- Dynamic date inputs will appear here -->
+                            </div>
+                        </div>
+
+                        <button type="submit" class="kirby-button kirby-button-primary w-full">
+                            <i data-lucide="plus" class="mr-2"></i>Añadir Tarea
+                        </button>
+                    </div>
+                </form>
+            </div>
+            <div class="kirby-card">
+                <h3 class="text-xl font-bold text-pink-800 mb-4">Lista de Tareas Asignadas</h3>
+                <div id="task-list" class="space-y-3 max-h-96 overflow-y-auto pr-2">
+                    ${db.tasks.length > 0 ? [...db.tasks].sort((a,b) => new Date(a.assignments[0]?.dueDate) - new Date(b.assignments[0]?.dueDate)).map(task => `
+                        <div class="p-4 bg-slate-50 rounded-lg">
+                            <div class="flex justify-between items-start">
+                                <p class="font-semibold text-slate-800 pr-2">${task.name}</p>
+                                <div class="flex-shrink-0 flex gap-1">
+                                    <button onclick="openEditTaskModal(${task.id})" class="p-1 text-blue-500 hover:text-blue-700 hover:bg-blue-100 rounded-full"><i data-lucide="pencil" class="w-4 h-4"></i></button>
+                                    <button onclick="deleteTask(${task.id})" class="p-1 text-red-500 hover:text-red-700 hover:bg-red-100 rounded-full"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                                </div>
+                            </div>
+                            <div class="mt-2 space-y-1">
+                                ${task.assignments.map(a => `<div class="flex items-center gap-2"><span class="text-xs font-bold px-2 py-0.5 rounded-full ${groupColors[a.group] || 'bg-gray-100 text-gray-800'}">G-${a.group}</span> <p class="text-sm text-slate-500"><strong>Entrega:</strong> ${new Date(a.dueDate + 'T00:00:00-07:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' })}</p></div>`).join('')}
+                            </div>
+                        </div>
+                    `).join('') : '<p class="text-sm text-slate-500">No hay tareas asignadas.</p>'}
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Dynamically generate group checkboxes with date inputs
+    const assignmentContainer = document.getElementById('task-group-assignments');
+    ['5-1', '5-2', '5-3'].forEach(group => {
+        assignmentContainer.innerHTML += `
+            <div class="flex items-center gap-2 p-2 rounded-lg has-[:checked]:bg-pink-50">
+                <input type="checkbox" name="group" value="${group}" onchange="this.nextElementSibling.nextElementSibling.classList.toggle('hidden')" class="h-4 w-4 text-pink-600 border-gray-300 rounded"> 
+                <label class="font-medium">Grupo ${group}</label>
+                <input type="date" name="dueDate-${group}" class="ml-auto p-1 border border-slate-300 rounded-lg hidden">
+            </div>
+        `;
+    });
+
+    lucide.createIcons();
+}
+
+function addNewTask(event) {
+    event.preventDefault();
+    const form = event.target;
+    const name = form.elements.name.value;
+    
+    const assignments = [];
+    Array.from(form.elements.group).forEach(checkbox => {
+        if (checkbox.checked) {
+            const dueDate = form.elements[`dueDate-${checkbox.value}`].value;
+            if (!dueDate) {
+                showToast(`Error: Por favor, defina una fecha para el grupo ${checkbox.value}.`);
+                return;
+            }
+            assignments.push({ group: checkbox.value, dueDate });
+        }
+    });
+
+    if (assignments.length === 0) {
+        showToast("Error: Debe seleccionar y configurar al menos un grupo.");
+        return;
+    }
+    
+    if (assignments.some(a => !a.dueDate)) {
+        return; // Stop if any selected group is missing a date
+    }
+
+    const newTask = {
+        id: Date.now(),
+        name,
+        assignments
+    };
+
+    db.tasks.push(newTask);
+    saveData();
+    renderTasksView();
+    showToast('Tarea añadida exitosamente.');
+}
+
+function deleteTask(taskId) {
+    db.tasks = db.tasks.filter(t => t.id !== taskId);
+    saveData();
+    renderTasksView();
+    showToast('Tarea eliminada.');
+}
+
+function openEditTaskModal(taskId) {
+    editingTaskId = taskId;
+    const task = db.tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    const modalContainer = document.getElementById('edit-task-modal');
+    
+    let assignmentsHTML = '';
+    ['5-1', '5-2', '5-3'].forEach(group => {
+        const assignment = task.assignments.find(a => a.group === group);
+        const isChecked = !!assignment;
+        const dueDate = assignment ? assignment.dueDate : '';
+        assignmentsHTML += `
+            <div class="flex items-center gap-2 p-2 rounded-lg has-[:checked]:bg-pink-50">
+                <input type="checkbox" name="group" value="${group}" onchange="this.nextElementSibling.nextElementSibling.classList.toggle('hidden')" class="h-4 w-4 text-pink-600 border-gray-300 rounded" ${isChecked ? 'checked' : ''}> 
+                <label class="font-medium">Grupo ${group}</label>
+                <input type="date" name="dueDate-${group}" value="${dueDate}" class="ml-auto p-1 border border-slate-300 rounded-lg ${isChecked ? '' : 'hidden'}">
+            </div>
+        `;
+    });
+    
+    modalContainer.innerHTML = `
+        <div class="kirby-card w-full max-w-lg modal-content">
+            <h3 class="text-xl font-bold text-pink-800 mb-4">Editar Tarea</h3>
+            <form id="form-edit-task" onsubmit="saveEditedTask(event)">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700">Descripción</label>
+                        <textarea name="name" rows="3" class="mt-1 w-full p-2 border border-slate-300 rounded-lg" required>${task.name}</textarea>
+                    </div>
+                    <div>
+                        <p class="text-sm font-medium text-slate-700">Asignaciones</p>
+                        <div class="mt-2 space-y-2">${assignmentsHTML}</div>
+                    </div>
+                    <div class="flex gap-2">
+                        <button type="button" onclick="closeModal('edit-task-modal')" class="kirby-button kirby-button-secondary w-full">Cancelar</button>
+                        <button type="submit" class="kirby-button kirby-button-primary w-full">Guardar Cambios</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    `;
+    modalContainer.classList.add('visible');
+}
+
+function saveEditedTask(event) {
+    event.preventDefault();
+    const form = event.target;
+    const name = form.elements.name.value;
+    
+    const assignments = [];
+    Array.from(form.elements.group).forEach(checkbox => {
+        if (checkbox.checked) {
+            const dueDate = form.elements[`dueDate-${checkbox.value}`].value;
+            if (!dueDate) {
+                showToast(`Error: Por favor, defina una fecha para el grupo ${checkbox.value}.`);
+                return;
+            }
+            assignments.push({ group: checkbox.value, dueDate });
+        }
+    });
+
+    if (assignments.length === 0) {
+        showToast("Error: Debe seleccionar y configurar al menos un grupo.");
+        return;
+    }
+    if (assignments.some(a => !a.dueDate)) return;
+
+    const taskIndex = db.tasks.findIndex(t => t.id === editingTaskId);
+    if (taskIndex > -1) {
+        db.tasks[taskIndex].name = name;
+        db.tasks[taskIndex].assignments = assignments;
+    }
+    
+    saveData();
+    renderTasksView();
+    closeModal('edit-task-modal');
+    showToast('Tarea actualizada.');
+}
+
+// --- STUDENT MANAGEMENT FUNCTIONS ---
+function showStudentManagementView() {
+    selectedStudentId = null;
+    document.getElementById('evaluation-content').classList.add('hidden');
+    document.getElementById('program-content').classList.add('hidden');
+    document.getElementById('tasks-content').classList.add('hidden');
+    document.getElementById('student-management-content').classList.remove('hidden');
+    document.getElementById('no-student-selected').classList.add('hidden');
+
+    if (window.innerWidth < 768) {
+        toggleMenu();
+    }
+    renderStudentManagementView();
+}
+
+function renderStudentManagementView() {
+    const container = document.getElementById('student-management-content');
+    container.innerHTML = `
+        <h2 class="fredoka text-3xl sm:text-4xl font-extrabold text-slate-800 mb-6" style="color: var(--bubblegum-pink);">Gestionar Lista de Alumnos</h2>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+            <div>
+                <div class="kirby-card">
+                    <h3 class="text-xl font-bold text-pink-800 mb-4">Añadir Alumno</h3>
+                    <form id="form-add-student" onsubmit="addStudent(event)">
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700">Nombre Completo</label>
+                                <input type="text" name="studentName" class="mt-1 w-full p-2 border border-slate-300 rounded-lg" required>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700">Grupo</label>
+                                <select name="studentGroup" class="mt-1 w-full p-2 border border-slate-300 rounded-lg bg-white">
+                                    <option value="5-1">5-1</option>
+                                    <option value="5-2">5-2</option>
+                                    <option value="5-3">5-3</option>
+                                </select>
+                            </div>
+                            <button type="submit" class="kirby-button kirby-button-primary w-full">
+                                <i data-lucide="user-plus" class="mr-2"></i>Añadir Alumno
+                            </button>
+                        </div>
+                    </form>
+                </div>
+                <div class="kirby-card mt-8 border-red-300">
+                    <h3 class="text-xl font-bold text-red-800 mb-4">Zona de Peligro</h3>
+                    <div class="space-y-4">
+                        <div class="p-4 bg-red-50 rounded-lg">
+                            <label class="block text-sm font-medium text-red-700">Eliminar todos los alumnos de un grupo</label>
+                            <div class="flex gap-2 mt-2">
+                                <select id="delete-group-select" class="w-full p-2 border border-slate-300 rounded-lg bg-white">
+                                    <option value="5-1">Grupo 5-1</option><option value="5-2">Grupo 5-2</option><option value="5-3">Grupo 5-3</option>
+                                </select>
+                                <button onclick="deleteGroupStudents()" class="kirby-button bg-red-500 text-white hover:bg-red-700 flex-shrink-0">Eliminar</button>
+                            </div>
+                        </div>
+                         <div class="p-4 bg-red-50 rounded-lg">
+                            <label class="block text-sm font-medium text-red-700">Eliminar TODOS los alumnos del sistema</label>
+                            <p class="text-xs text-red-600">Esta acción no se puede deshacer y es ideal para reiniciar el semestre.</p>
+                            <button onclick="deleteAllStudents()" class="kirby-button bg-red-500 text-white hover:bg-red-700 w-full mt-2">Eliminar Todo</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="kirby-card">
+                 <h3 class="text-xl font-bold text-pink-800 mb-4">Lista de Alumnos Actual</h3>
+                 <div id="student-management-list" class="space-y-2 max-h-[60vh] overflow-y-auto pr-2">
+                    <!-- Student management list is rendered here -->
+                 </div>
+            </div>
+        </div>
+    `;
+    renderStudentManagementList();
+    lucide.createIcons();
+}
+
+function renderStudentManagementList() {
+    const listContainer = document.getElementById('student-management-list');
+    listContainer.innerHTML = [...db.students].sort((a, b) => a.name.localeCompare(b.name)).map(student => `
+        <div class="p-2 bg-slate-50 rounded-lg flex items-center gap-2">
+            <input type="text" value="${student.name}" onchange="updateStudentName(${student.id}, this.value)" class="w-full bg-transparent p-1 font-semibold text-slate-800">
+            <select onchange="updateStudentGroup(${student.id}, this.value)" class="p-1 border-0 bg-transparent rounded-lg text-sm">
+                <option value="5-1" ${student.group === '5-1' ? 'selected' : ''}>5-1</option>
+                <option value="5-2" ${student.group === '5-2' ? 'selected' : ''}>5-2</option>
+                <option value="5-3" ${student.group === '5-3' ? 'selected' : ''}>5-3</option>
+            </select>
+            <button onclick="deleteStudent(${student.id})" class="p-1 text-red-500 hover:text-red-700 hover:bg-red-100 rounded-full flex-shrink-0"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+        </div>
+    `).join('');
+    lucide.createIcons();
+}
+
+function addStudent(event) {
+    event.preventDefault();
+    const form = event.target;
+    const name = form.elements.studentName.value.trim().toUpperCase();
+    const group = form.elements.studentGroup.value;
+
+    if (!name) {
+        showToast('El nombre del alumno no puede estar vacío.');
+        return;
+    }
+
+    const newId = db.students.length > 0 ? Math.max(...db.students.map(s => s.id)) + 1 : 1;
+    
+    db.students.push({
+        id: newId,
+        name,
+        group,
+        avatar: generateAvatarUrl(name),
+        evaluations: [],
+        parciales: { practicas: {}, teoricos: {} },
+        constancia_details: {
+            total_clases: 0, asistencias: 0, inasistencias: 0, justificantes: 0, retardos: 0,
+            total_tareas: 0, entregadas: 0, retardos_tareas: 0, no_entregadas: 0,
+            participacion: 'nula', bio_heroe_extra: false
+        }
+    });
+
+    saveData();
+    renderStudentManagementList();
+    renderStudentList();
+    showToast('Alumno añadido.');
+    form.reset();
+}
+
+function updateStudentName(studentId, newName) {
+    const student = db.students.find(s => s.id === studentId);
+    if (student) {
+        student.name = newName.trim().toUpperCase();
+        saveData();
+        renderStudentList();
+        showToast('Nombre actualizado.');
+    }
+}
+
+function updateStudentGroup(studentId, newGroup) {
+     const student = db.students.find(s => s.id === studentId);
+    if (student) {
+        student.group = newGroup;
+        saveData();
+        renderStudentList();
+        showToast('Grupo actualizado.');
+    }
+}
+
+function deleteStudent(studentId) {
+    if (confirm(`¿Está seguro de que desea eliminar a este alumno? Esta acción no se puede deshacer.`)) {
+        db.students = db.students.filter(s => s.id !== studentId);
+        saveData();
+        renderStudentManagementList();
+        renderStudentList();
+        showToast('Alumno eliminado.');
+    }
+}
+
+function deleteGroupStudents() {
+    const group = document.getElementById('delete-group-select').value;
+    if (confirm(`¿ESTÁ SEGURO? Se eliminarán TODOS los alumnos del grupo ${group}. Esta acción es irreversible.`)) {
+        db.students = db.students.filter(s => s.group !== group);
+        saveData();
+        renderStudentManagementList();
+        renderStudentList();
+        showToast(`Alumnos del grupo ${group} eliminados.`);
+    }
+}
+
+function deleteAllStudents() {
+     if (confirm(`¡ADVERTENCIA FINAL! ¿Está completamente seguro de que desea eliminar a TODOS los alumnos de TODOS los grupos? Esta acción no se puede deshacer.`)) {
+        db.students = [];
+        db.certificate_codes = [];
+        db.tasks = [];
+        db.courseProgram = courseProgramData;
+        saveData();
+        renderStudentManagementList();
+        renderStudentList();
+        showToast('Todos los alumnos han sido eliminados. El sistema está listo para el nuevo semestre.');
+    }
 }
 
 </script>
